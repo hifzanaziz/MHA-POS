@@ -1,0 +1,48 @@
+MHA WEB POS v11 - FUTURISTIC UI
+================================
+
+This package continues from your previous MHA Web POS v10 and applies the new futuristic Aurora UI skin.
+The business logic and existing POS workflows are retained.
+
+HOW TO RUN ON WINDOWS
+---------------------
+1. Extract this ZIP to a normal folder, for example:
+   D:\MHA-Web-POS-v11
+2. Open Command Prompt (CMD).
+3. Change to the extracted folder, for example:
+   cd /d "D:\MHA-Web-POS-v11"
+4. Install dependencies:
+   npm install
+5. Start the POS:
+   npm run dev
+6. Open the local address shown by Vite, normally:
+   http://localhost:5173
+
+If PowerShell shows "npm.ps1 cannot be loaded", use CMD instead.
+
+DEMO LOGIN
+----------
+Username: manager
+Password: 1234
+
+WHAT CHANGED IN v11
+-------------------
+- Futuristic dark gradient navigation sidebar
+- HanaAzz Enterprise brand treatment
+- Aurora purple/blue accent system
+- Glass-style cards and top bar
+- Modern dashboard hero and KPI cards
+- Refreshed charts, product cards, cart and tables
+- Glowing active navigation and online status
+- Improved mobile visual treatment
+- Existing business rules and workflows retained
+
+IMPORTANT
+---------
+- This version still uses frontend demo/mock data only.
+- Closing/reloading the app may reset demo data because it is not yet connected to MySQL.
+- Do not use this prototype as a live production POS yet.
+
+VERIFICATION
+------------
+31 automated source/regression tests pass in this package.

@@ -1,0 +1,1351 @@
+import React, { useMemo, useState } from "react";
+import ReactDOM from "react-dom/client";
+import {
+  AlertTriangle,
+  BarChart3,
+  Boxes,
+  ChevronRight,
+  CircleDollarSign,
+  LayoutDashboard,
+  Grid3X3,
+  List,
+  LogOut,
+  Minus,
+  PackageCheck,
+  PackageX,
+  Plus,
+  Search,
+  ShoppingCart,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Eye,
+  Pencil,
+  Trash2,
+  X,
+  ReceiptText,
+  History,
+  CreditCard,
+  BookOpenText,
+  Store,
+  UtensilsCrossed,
+  WalletCards,
+} from "lucide-react";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  Bar,
+  BarChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import "./styles.css";
+import { sortProducts, recordPurchase, validateSku } from "./inventoryUtils.js";
+import { getOrderToRecipeFactor, applyProductionWithRecipe, calculateOptionPrice, validateOptionSelections } from "./recipeUtils.js";
+import { validateProductSku, validateProductOptions, getRecipeStatus, canDeleteProductSku, filterAndSortProductSkus } from "./productUtils.js";
+import { createOrderRecord, completeOrderPayment, completeOrderPickup, filterAndSortOrders } from "./orderUtils.js";
+import { getNetSalesSummary, getTopProductSales, getTopInventoryUsage, getStockAlerts, getSellingTrend } from "./dashboardUtils.js";
+
+const productsSeed = [
+  { id: 1, skuType: "product", sku: "KR-SS-001", name: "Samperit Susu", category: "Kuih Raya", price: 20, stock: 24, minimum: 8, produced: 40, sold: 16, optionGroups: [
+    { id: "size", name: "Size", required: true, priceImpact: true, recipeImpact: true, options: [
+      { id: "regular", name: "Regular", priceAdjustment: 0, recipeChanges: [] },
+      { id: "large", name: "Large", priceAdjustment: 5, recipeChanges: [{ inventorySkuId: 101, qtyRecipeUom: 50, mode: "add" }] },
+    ] },
+    { id: "flavour", name: "Flavour", required: false, priceImpact: true, recipeImpact: true, options: [
+      { id: "original", name: "Original", priceAdjustment: 0, recipeChanges: [] },
+      { id: "pandan", name: "Pandan", priceAdjustment: 2, recipeChanges: [{ inventorySkuId: 102, qtyRecipeUom: 15, mode: "add" }] },
+    ] },
+  ] },
+  { id: 2, skuType: "product", sku: "KR-SB-002", name: "Samperit Bunga", category: "Kuih Raya", price: 20, stock: 20, minimum: 8, produced: 36, sold: 16 },
+  { id: 3, skuType: "product", sku: "KR-TN-003", name: "Tart Nenas", category: "Kuih Raya", price: 20, stock: 18, minimum: 8, produced: 38, sold: 20 },
+  { id: 4, skuType: "product", sku: "KR-AL-004", name: "Almond London", category: "Kuih Raya", price: 20, stock: 15, minimum: 6, produced: 30, sold: 15 },
+  { id: 5, skuType: "product", sku: "KR-TB-005", name: "Tart Blueberry", category: "Kuih Raya", price: 20, stock: 22, minimum: 8, produced: 35, sold: 13 },
+  { id: 6, skuType: "product", sku: "RT-SR-001", name: "Sausage Roll", category: "Roti", price: 25, stock: 16, minimum: 6, produced: 28, sold: 12 },
+  { id: 7, skuType: "product", sku: "RT-PM-002", name: "Pizza Mini", category: "Roti", price: 25, stock: 14, minimum: 6, produced: 26, sold: 12 },
+  { id: 8, skuType: "product", sku: "RT-PS-003", name: "Pizza Sardin", category: "Roti", price: 25, stock: 12, minimum: 6, produced: 24, sold: 12 },
+
+  { id: 101, skuType: "inventory", sku: "INV-TG-001", name: "Tepung Gandum", category: "Bahan Kering", price: 0, stock: 25, minimum: 8, produced: 0, sold: 0, orderUom: "Carton", inventoryUom: "KG", recipeUom: "Gram", orderToInventory: 10, inventoryToRecipe: 1000, purchaseHistory: [] },
+  { id: 102, skuType: "inventory", sku: "INV-GL-002", name: "Gula", category: "Bahan Kering", price: 0, stock: 18, minimum: 5, produced: 0, sold: 0, orderUom: "Carton", inventoryUom: "Pack", recipeUom: "Gram", orderToInventory: 5, inventoryToRecipe: 500, purchaseHistory: [] },
+  { id: 103, skuType: "inventory", sku: "INV-TJ-003", name: "Tepung Jagung", category: "Bahan Kering", price: 0, stock: 20, minimum: 5, produced: 0, sold: 0, orderUom: "Carton", inventoryUom: "Pack", recipeUom: "Gram", orderToInventory: 10, inventoryToRecipe: 500, purchaseHistory: [] },
+  { id: 104, skuType: "inventory", sku: "INV-YM-004", name: "Yis Maripan", category: "Bahan Kering", price: 0, stock: 12, minimum: 3, produced: 0, sold: 0, orderUom: "Carton", inventoryUom: "Pack", recipeUom: "Gram", orderToInventory: 20, inventoryToRecipe: 500, purchaseHistory: [] },
+  { id: 105, skuType: "inventory", sku: "INV-SJ-005", name: "Sosej", category: "Bahan Sejuk Beku", price: 0, stock: 15, minimum: 5, produced: 0, sold: 0, orderUom: "Carton", inventoryUom: "Pack", recipeUom: "Piece", orderToInventory: 10, inventoryToRecipe: 10, purchaseHistory: [] },
+  { id: 106, skuType: "inventory", sku: "INV-TL-006", name: "Telur", category: "Bahan Mentah", price: 0, stock: 60, minimum: 20, produced: 0, sold: 0, orderUom: "Tray", inventoryUom: "Piece", recipeUom: "Piece", orderToInventory: 30, inventoryToRecipe: 1, purchaseHistory: [] },
+];
+
+function money(value) {
+  return new Intl.NumberFormat("en-MY", {
+    style: "currency",
+    currency: "MYR",
+    minimumFractionDigits: 2,
+  }).format(value);
+}
+
+function Login({ onLogin }) {
+  const [username, setUsername] = useState("manager");
+  const [password, setPassword] = useState("1234");
+  const [error, setError] = useState("");
+
+  function submit(e) {
+    e.preventDefault();
+    if (!username.trim() || !password.trim()) {
+      setError("Please enter username and password.");
+      return;
+    }
+    onLogin(username);
+  }
+
+  return (
+    <div className="login-page">
+      <div className="login-visual">
+        <div className="brand-badge">
+          <Store size={24} />
+          <span>MHA Web POS</span>
+        </div>
+        <div>
+          <p className="eyebrow">RETAIL OPERATIONS</p>
+          <h1>One workspace for sales, stock and production.</h1>
+          <p className="lead">
+            Responsive web POS prototype designed for cashier, inventory and production workflows.
+          </p>
+        </div>
+        <div className="login-stats">
+          <div><strong>4</strong><span>Operation modes</span></div>
+          <div><strong>24/7</strong><span>Store visibility</span></div>
+          <div><strong>Live</strong><span>Inventory status</span></div>
+        </div>
+      </div>
+
+      <form className="login-card" onSubmit={submit}>
+        <div className="mobile-brand">
+          <Store size={22} />
+          <span>MHA Web POS</span>
+        </div>
+        <p className="eyebrow">WELCOME BACK</p>
+        <h2>Sign in to your store</h2>
+        <p className="muted">Demo credentials are prefilled. Any non-empty credentials can enter.</p>
+
+        <label>
+          Username
+          <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Enter username" />
+        </label>
+
+        <label>
+          Password
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter password" />
+        </label>
+
+        {error && <div className="form-error">{error}</div>}
+        <button className="primary-btn full" type="submit">
+          Login <ChevronRight size={18} />
+        </button>
+
+        <div className="demo-note">
+          <span>Demo</span>
+          <code>manager / 1234</code>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+const navItems = [
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "order", label: "Order Taking", icon: ShoppingCart },
+  { id: "orderHistory", label: "Order History", icon: History },
+  { id: "inventory", label: "Inventory", icon: Boxes },
+  { id: "recipe", label: "Recipe Management", icon: BookOpenText },
+  { id: "production", label: "Production SKU", icon: UtensilsCrossed },
+];
+
+function AppShell({ user, page, setPage, onLogout, children }) {
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="sidebar-brand">
+          <div className="brand-mark"><Store size={23} /></div>
+          <div>
+            <strong>HanaAzz</strong>
+            <span>Enterprise • MHA POS</span>
+          </div>
+        </div>
+
+        <nav>
+          {navItems.map(({ id, label, icon: Icon }) => (
+            <button key={id} className={page === id ? "nav-active" : ""} onClick={() => setPage(id)}>
+              <Icon size={20} />
+              <span>{label}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="sidebar-bottom">
+          <div className="system-status"><span className="status-dot" /> System Online</div>
+          <button className="logout-btn" onClick={onLogout}>
+            <LogOut size={18} />
+            Logout
+          </button>
+        </div>
+      </aside>
+
+      <main className="main">
+        <header className="topbar">
+          <div>
+            <p className="eyebrow">HanaAzz Enterprise • STORE 001</p>
+            <h2>{navItems.find((x) => x.id === page)?.label}</h2>
+          </div>
+          <div className="user-chip">
+            <span className="status-dot" />
+            <div>
+              <strong>{user}</strong>
+              <span>Store Manager</span>
+            </div>
+          </div>
+        </header>
+        <div className="page-content">{children}</div>
+      </main>
+
+      <nav className="mobile-nav">
+        {navItems.map(({ id, label, icon: Icon }) => (
+          <button key={id} className={page === id ? "nav-active" : ""} onClick={() => setPage(id)}>
+            <Icon size={20} />
+            <span>{label === "Production SKU" ? "Production" : label === "Recipe Management" ? "Recipe" : label === "Order History" ? "Orders" : label}</span>
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
+function StatCard({ label, value, sub, icon: Icon, danger }) {
+  return (
+    <div className={`stat-card ${danger ? "danger-card" : ""}`}>
+      <div className="stat-icon"><Icon size={21} /></div>
+      <div>
+        <span>{label}</span>
+        <strong>{value}</strong>
+        <small>{sub}</small>
+      </div>
+    </div>
+  );
+}
+
+function Dashboard({ products, orders, recipes, onNavigate }) {
+  const [trendRange, setTrendRange] = useState("7d");
+  const productSkus = products.filter((p) => p.skuType !== "inventory");
+  const sold = productSkus.reduce((a, p) => a + Number(p.sold || 0), 0);
+  const netSales = getNetSalesSummary(orders);
+  const topProducts = getTopProductSales(products).map((item) => ({ ...item, label: item.name }));
+  const topInventory = getTopInventoryUsage(products, recipes).map((item) => ({ ...item, label: `${item.name} (${item.uom})` }));
+  const sellingTrend = getSellingTrend(orders, trendRange);
+  const alerts = getStockAlerts(products);
+  const totalAlerts = alerts.inventory.length + alerts.product.length;
+
+  function AlertList({ items, type }) {
+    if (!items.length) {
+      return <div className="dashboard-empty-alert">No low or out-of-stock {type} SKU.</div>;
+    }
+    return (
+      <div className="alert-list">
+        {items.map((p) => (
+          <div key={p.id} className="alert-row">
+            <div className={`stock-indicator ${Number(p.stock || 0) === 0 ? "out" : "low"}`}>
+              {Number(p.stock || 0) === 0 ? <PackageX size={18} /> : <AlertTriangle size={18} />}
+            </div>
+            <div className="grow">
+              <strong>{p.name}</strong>
+              <span>{p.sku}</span>
+            </div>
+            <div className="stock-number">
+              <strong>{Number(p.stock || 0)}</strong>
+              <span>Min {Number(p.minimum || 0)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="dashboard-grid dashboard-v2">
+      <section className="hero-panel">
+        <div>
+          <p className="eyebrow">TODAY'S STORE PULSE</p>
+          <h1>Good afternoon. Your store is operational.</h1>
+          <p>{totalAlerts} SKU require stock attention across Product and Inventory.</p>
+        </div>
+        <button className="primary-btn" onClick={() => onNavigate("order")}>
+          Start Order <ShoppingCart size={18} />
+        </button>
+      </section>
+
+      <section className="stats-grid dashboard-stats-three">
+        <StatCard label="Sold SKU" value={sold} sub="Completed sales quantity" icon={PackageCheck} />
+        <StatCard label="Daily Net Sales" value={money(netSales.daily)} sub="Completed payments today" icon={WalletCards} />
+        <StatCard label="Monthly Net Sales" value={money(netSales.monthly)} sub="From day 1 until today" icon={CircleDollarSign} />
+      </section>
+
+      <section className="chart-card dashboard-selling-trend">
+        <div className="section-head">
+          <div>
+            <p className="eyebrow">SELLING TREND</p>
+            <h3>Product SKU Sold Trend</h3>
+          </div>
+          <div className="segmented">
+            <button className={trendRange === "7d" ? "selected" : ""} onClick={() => setTrendRange("7d")}>1 Week</button>
+            <button className={trendRange === "1m" ? "selected" : ""} onClick={() => setTrendRange("1m")}>1 Month</button>
+          </div>
+        </div>
+        <div className="chart-wrap selling-trend-wrap">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={sellingTrend} margin={{ top: 8, right: 12, left: -16, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="4 4" vertical={false} />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={trendRange === "1m" ? 22 : 8} />
+              <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
+              <Tooltip formatter={(value) => [`${value}`, "Sold Qty"]} labelFormatter={(label) => `Date: ${label}`} />
+              <Line type="monotone" dataKey="sold" strokeWidth={3} dot={trendRange === "7d" ? { r: 4 } : false} activeDot={{ r: 5 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
+
+      <section className="chart-card dashboard-rank-chart">
+        <div className="section-head">
+          <div>
+            <p className="eyebrow">PRODUCT PERFORMANCE</p>
+            <h3>Top 5 Product SKU Sold</h3>
+          </div>
+          <BarChart3 size={22} />
+        </div>
+        <div className="chart-wrap rank-chart-wrap">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={topProducts} layout="vertical" margin={{ top: 8, right: 20, left: 18, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="4 4" horizontal={false} />
+              <XAxis type="number" tickLine={false} axisLine={false} allowDecimals={false} />
+              <YAxis type="category" dataKey="label" width={120} tickLine={false} axisLine={false} />
+              <Tooltip formatter={(value) => [`${value}`, "Sold Qty"]} />
+              <Bar dataKey="sold" radius={[0, 7, 7, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
+
+      <section className="chart-card dashboard-rank-chart">
+        <div className="section-head">
+          <div>
+            <p className="eyebrow">RECIPE CONSUMPTION</p>
+            <h3>Top 5 Inventory SKU Usage</h3>
+          </div>
+          <Boxes size={22} />
+        </div>
+        <div className="chart-wrap rank-chart-wrap">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={topInventory} layout="vertical" margin={{ top: 8, right: 20, left: 18, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="4 4" horizontal={false} />
+              <XAxis type="number" tickLine={false} axisLine={false} />
+              <YAxis type="category" dataKey="label" width={150} tickLine={false} axisLine={false} />
+              <Tooltip formatter={(value, _name, props) => [`${Number(value).toLocaleString()} ${props?.payload?.uom || ""}`, "Recipe Usage"]} />
+              <Bar dataKey="usage" radius={[0, 7, 7, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
+
+      <section className="dashboard-alerts-section">
+        <div className="dashboard-alerts-heading">
+          <div>
+            <p className="eyebrow">STOCK ATTENTION</p>
+            <h3>Low & out of stock alerts</h3>
+          </div>
+          <AlertTriangle size={22} />
+        </div>
+        <div className="dashboard-alert-grid">
+          <article className="alert-card dashboard-alert-card">
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">INVENTORY SKU</p>
+                <h3>Inventory Alert</h3>
+              </div>
+              <span className="alert-count-badge">{alerts.inventory.length}</span>
+            </div>
+            <AlertList items={alerts.inventory} type="Inventory" />
+            <button className="text-btn" onClick={() => onNavigate("inventory")}>View inventory <ChevronRight size={16} /></button>
+          </article>
+
+          <article className="alert-card dashboard-alert-card">
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">PRODUCT SKU</p>
+                <h3>Product SKU Alert</h3>
+              </div>
+              <span className="alert-count-badge">{alerts.product.length}</span>
+            </div>
+            <AlertList items={alerts.product} type="Product" />
+            <button className="text-btn" onClick={() => onNavigate("production")}>View Production SKU <ChevronRight size={16} /></button>
+          </article>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function OptionSelectionModal({ product, selections, setSelections, onCancel, onConfirm, title = "Select Options", actionLabel = "Add to Order" }) {
+  const groups = product?.optionGroups || [];
+  const validation = validateOptionSelections(groups, selections);
+  const finalPrice = calculateOptionPrice(product?.price || 0, groups, selections);
+  return (
+    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
+      <div className="modal-card option-selection-modal" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="modal-head"><div><p className="eyebrow">{title.toUpperCase()}</p><h3>{product?.name}</h3><span className="muted">Base price {money(product?.price || 0)}</span></div><button className="icon-btn" onClick={onCancel}><X size={18} /></button></div>
+        <div className="option-selection-list">
+          {groups.map((group) => (
+            <div className="option-group-card" key={group.id}>
+              <div className="option-group-head"><strong>{group.name}</strong><span>{group.required ? "Required" : "Optional"}{group.recipeImpact ? " • Recipe impact" : ""}</span></div>
+              <div className="option-choice-grid">
+                {!group.required && <button className={!selections[group.id] ? "option-choice selected" : "option-choice"} onClick={() => setSelections((current) => ({ ...current, [group.id]: "" }))}><strong>None</strong><span>No selection</span></button>}
+                {group.options.map((option) => (
+                  <button key={option.id} className={selections[group.id] === option.id ? "option-choice selected" : "option-choice"} onClick={() => setSelections((current) => ({ ...current, [group.id]: option.id }))}>
+                    <strong>{option.name}</strong><span>{Number(option.priceAdjustment || 0) ? `+${money(option.priceAdjustment)}` : "No price change"}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        {validation && <div className="form-error">{validation}</div>}
+        <div className="option-total"><span>Final Unit Price</span><strong>{money(finalPrice)}</strong></div>
+        <div className="modal-actions"><button className="secondary-btn" onClick={onCancel}>Cancel</button><button className="primary-btn" disabled={!!validation} onClick={() => onConfirm(finalPrice)}>{actionLabel}</button></div>
+      </div>
+    </div>
+  );
+}
+
+function OrderTaking({ products, setProducts, orders, setOrders, onNavigate }) {
+  const [cart, setCart] = useState([]);
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState("All");
+  const [customerName, setCustomerName] = useState("");
+  const [customerTelephone, setCustomerTelephone] = useState("");
+  const [selectionProduct, setSelectionProduct] = useState(null);
+  const [selections, setSelections] = useState({});
+
+  const saleProducts = products.filter((p) => p.skuType !== "inventory");
+  const categories = ["All", ...new Set(saleProducts.map((p) => p.category))];
+  const filtered = saleProducts.filter((p) => {
+    const matchCategory = category === "All" || p.category === category;
+    const matchQuery = p.name.toLowerCase().includes(query.toLowerCase()) || p.sku.toLowerCase().includes(query.toLowerCase());
+    return matchCategory && matchQuery;
+  });
+
+  function openProduct(product) {
+    if (product.stock <= 0) return;
+    if (!(product.optionGroups || []).length) return addConfigured(product, {}, Number(product.price));
+    setSelectionProduct(product);
+    const defaults = {};
+    (product.optionGroups || []).forEach((group) => { if (!group.required && group.options?.length === 0) defaults[group.id] = ""; });
+    setSelections(defaults);
+  }
+
+  function addConfigured(product, selected, finalPrice) {
+    const selectedOptions = (product.optionGroups || []).flatMap((group) => {
+      const option = group.options?.find((item) => item.id === selected[group.id]);
+      return option ? [{ groupId: group.id, groupName: group.name, optionId: option.id, optionName: option.name, priceAdjustment: Number(option.priceAdjustment || 0) }] : [];
+    });
+    const signature = JSON.stringify(selected);
+    setCart((current) => {
+      const found = current.find((x) => x.id === product.id && JSON.stringify(x.selections || {}) === signature);
+      if (found) {
+        if (found.qty >= product.stock) return current;
+        return current.map((x) => x === found ? { ...x, qty: x.qty + 1 } : x);
+      }
+      return [...current, { ...product, id: `${product.id}-${signature}`, productId: product.id, basePrice: Number(product.price), price: finalPrice, selections: selected, selectedOptions, qty: 1 }];
+    });
+    setSelectionProduct(null);
+    setSelections({});
+  }
+
+  function adjust(id, delta) {
+    setCart((current) => current.map((x) => {
+      const p = products.find((p) => p.id === x.productId || p.id === x.id);
+      return x.id === id ? { ...x, qty: Math.max(0, Math.min(x.qty + delta, p?.stock ?? 0)) } : x;
+    }).filter((x) => x.qty > 0));
+  }
+
+  const subtotal = cart.reduce((sum, x) => sum + x.price * x.qty, 0);
+  const tax = subtotal * 0.06;
+  const total = subtotal + tax;
+
+  function submitOrder(paymentStatus) {
+    if (!cart.length) return;
+    try {
+      const nextNumber = orders.length + 1;
+      const orderId = `ORD-${String(nextNumber).padStart(5, "0")}`;
+      const result = createOrderRecord(products, cart.map((item) => ({ ...item, id: item.productId ?? item.id })), { orderId, paymentStatus, customerName, customerTelephone });
+      setProducts(result.products);
+      setOrders((current) => [result.order, ...current]);
+      setCart([]); setCustomerName(""); setCustomerTelephone("");
+      alert(paymentStatus === "Completed" ? `${orderId} payment completed successfully.` : `${orderId} saved as Pay Later.`);
+    } catch (error) { alert(error.message); }
+  }
+
+  return (
+    <div className="pos-layout">
+      <section className="product-zone">
+        <div className="toolbar"><div className="search-box"><Search size={18} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search product or SKU..." /></div><div className="category-strip">{categories.map((c) => <button key={c} className={category === c ? "selected" : ""} onClick={() => setCategory(c)}>{c}</button>)}</div></div>
+        <div className="product-grid">
+          {filtered.map((p) => <button key={p.id} className={`product-card ${p.stock === 0 ? "disabled" : ""}`} onClick={() => openProduct(p)} disabled={p.stock === 0}>
+            <span className="product-category">{p.category}</span><strong>{p.name}</strong><span className="sku">{p.sku}</span>
+            <div className="product-bottom"><b>{money(p.price)}</b><span>{p.optionGroups?.length ? "Options" : `${p.stock} left`}</span></div>
+          </button>)}
+        </div>
+      </section>
+      <aside className="cart-panel">
+        <div className="section-head"><div><p className="eyebrow">CURRENT ORDER</p><h3>Table / Counter</h3></div><span className="cart-count">{cart.reduce((a, x) => a + x.qty, 0)}</span></div>
+        <div className="customer-info-box"><div className="customer-info-title"><strong>Customer Info</strong><span>Optional</span></div><div className="customer-info-grid"><label>Name<input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Customer name" /></label><label>Telephone No.<input value={customerTelephone} onChange={(e) => setCustomerTelephone(e.target.value)} placeholder="e.g. 0123456789" /></label></div></div>
+        <div className="cart-items">{!cart.length && <div className="empty-state"><ShoppingCart size={30} /><strong>No items yet</strong><span>Select an item to start the order.</span></div>}
+          {cart.map((x) => <div className="cart-item" key={x.id}><div className="grow"><strong>{x.name}</strong>{x.selectedOptions?.length > 0 && <span>{x.selectedOptions.map((o) => `${o.groupName}: ${o.optionName}`).join(" • ")}</span>}<span>{money(x.price)} each</span></div><div className="qty"><button onClick={() => adjust(x.id, -1)}><Minus size={15} /></button><span>{x.qty}</span><button onClick={() => adjust(x.id, 1)}><Plus size={15} /></button></div><strong>{money(x.price * x.qty)}</strong></div>)}
+        </div>
+        <div className="bill"><div><span>Subtotal</span><strong>{money(subtotal)}</strong></div><div><span>Tax 6%</span><strong>{money(tax)}</strong></div><div className="total"><span>Total</span><strong>{money(total)}</strong></div><button className="primary-btn full" disabled={!cart.length} onClick={() => submitOrder("Completed")}>Pay {money(total)}</button><button className="secondary-btn full pay-later-btn" disabled={!cart.length} onClick={() => submitOrder("Pending")}><History size={17} /> Pay Later</button><button className="text-btn full" type="button" onClick={() => onNavigate("orderHistory")}>View Order History <ChevronRight size={16} /></button></div>
+      </aside>
+      {selectionProduct && <OptionSelectionModal product={selectionProduct} selections={selections} setSelections={setSelections} onCancel={() => setSelectionProduct(null)} onConfirm={(price) => addConfigured(selectionProduct, selections, price)} />}
+    </div>
+  );
+}
+
+
+function OrderHistory({ orders, setOrders, products, setProducts }) {
+  const [selected, setSelected] = useState(null);
+  const [modal, setModal] = useState(null);
+  const [query, setQuery] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [sort, setSort] = useState({ key: "orderDate", dir: "desc" });
+
+  const shown = filterAndSortOrders(orders, {
+    query,
+    fromDate,
+    toDate,
+    sortKey: sort.key,
+    sortDir: sort.dir,
+  });
+
+  function toggleSort(key) {
+    setSort((current) => current.key === key
+      ? { key, dir: current.dir === "asc" ? "desc" : "asc" }
+      : { key, dir: "asc" });
+  }
+
+  function SortIcon({ column }) {
+    if (sort.key !== column) return <ArrowUpDown size={14} />;
+    return sort.dir === "asc" ? <ArrowUp size={14} /> : <ArrowDown size={14} />;
+  }
+
+  function showDetail(order) {
+    setSelected(order);
+    setModal("detail");
+  }
+
+  function openPayment(order) {
+    setSelected(order);
+    setModal("payment");
+  }
+
+  function openPickup(order) {
+    setSelected(order);
+    setModal("pickup");
+  }
+
+  function completePayment() {
+    try {
+      const result = completeOrderPayment(products, selected);
+      setProducts(result.products);
+      setOrders((current) => current.map((order) => order.id === selected.id ? result.order : order));
+      setSelected(result.order);
+      setModal(null);
+      alert(`${selected.id} payment completed successfully.`);
+    } catch (error) {
+      alert(error.message);
+    }
+  }
+
+  function confirmPickup() {
+    const updated = completeOrderPickup(selected);
+    setOrders((current) => current.map((order) => order.id === selected.id ? updated : order));
+    setSelected(updated);
+    setModal(null);
+  }
+
+  function formatDate(value) {
+    return new Date(value).toLocaleString("en-MY", { dateStyle: "medium", timeStyle: "short" });
+  }
+
+  const columns = [
+    ["orderDate", "Order Date"],
+    ["customerName", "Customer Name"],
+    ["id", "Order ID"],
+    [null, "Order Detail"],
+    ["subtotal", "Subtotal"],
+    ["tax", "Tax"],
+    ["grandTotal", "Grand Total"],
+    ["paymentStatus", "Payment Status"],
+    ["pickupStatus", "Pick Up"],
+  ];
+
+  return (
+    <>
+      <section className="table-card order-history-card">
+        <div className="order-history-toolbar">
+          <div>
+            <p className="eyebrow">ORDER TRANSACTIONS</p>
+            <h3>Order History</h3>
+          </div>
+          <div className="order-history-filters">
+            <div className="search-box compact order-search">
+              <Search size={18} />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search customer, order, item or status..." />
+            </div>
+            <label className="date-filter">From<input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} /></label>
+            <label className="date-filter">To<input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} /></label>
+            {(fromDate || toDate) && <button className="secondary-btn" onClick={() => { setFromDate(""); setToDate(""); }}>Clear Date</button>}
+          </div>
+        </div>
+
+        {shown.length === 0 ? (
+          <div className="order-empty-state">
+            <ReceiptText size={34} />
+            <strong>No orders found</strong>
+            <span>Adjust your search/date filter or create an order from Order Taking.</span>
+          </div>
+        ) : (
+          <div className="order-history-table">
+            <div className="order-history-row order-history-head">
+              {columns.map(([key, label]) => (
+                <span key={label}>
+                  {key ? (
+                    <button className="order-sort-btn" onClick={() => toggleSort(key)}>{label}<SortIcon column={key} /></button>
+                  ) : label}
+                </span>
+              ))}
+            </div>
+            {shown.map((order) => (
+              <div className="order-history-row" key={order.id}>
+                <span data-label="Order Date">{formatDate(order.orderDate)}</span>
+                <span data-label="Customer Name"><strong>{order.customerName || "Walk-in"}</strong><small>{order.customerTelephone || "-"}</small></span>
+                <span data-label="Order ID"><strong>{order.id}</strong></span>
+                <span data-label="Order Detail">
+                  <button className="text-btn order-detail-btn" onClick={() => showDetail(order)}>
+                    View {order.items.length} item{order.items.length === 1 ? "" : "s"} <Eye size={15} />
+                  </button>
+                </span>
+                <span data-label="Subtotal">{money(order.subtotal)}</span>
+                <span data-label="Tax">{money(order.tax)}</span>
+                <span data-label="Grand Total"><strong>{money(order.grandTotal)}</strong></span>
+                <span data-label="Payment Status">
+                  {order.paymentStatus === "Pending" ? (
+                    <button className="payment-status pending clickable" onClick={() => openPayment(order)}>Pending <CreditCard size={14} /></button>
+                  ) : (
+                    <span className="payment-status completed">Completed</span>
+                  )}
+                </span>
+                <span data-label="Pick Up">
+                  {(order.pickupStatus || "Pending") === "Pending" ? (
+                    <button className="pickup-status pending clickable" onClick={() => openPickup(order)}>Pending</button>
+                  ) : (
+                    <span className="pickup-status completed">Complete</span>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {modal && selected && (
+        <div className="modal-backdrop" onMouseDown={() => setModal(null)}>
+          <div className="modal-card order-modal" onMouseDown={(e) => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setModal(null)}><X size={18} /></button>
+            {modal === "detail" ? (
+              <>
+                <p className="eyebrow">ORDER DETAIL</p>
+                <h3>{selected.id}</h3>
+                <p className="muted">{formatDate(selected.orderDate)}</p>
+                <div className="customer-summary"><strong>{selected.customerName || "Walk-in Customer"}</strong><span>{selected.customerTelephone || "No telephone number"}</span></div>
+                <div className="order-detail-list">
+                  {selected.items.map((item) => (
+                    <div className="order-detail-line" key={`${selected.id}-${item.id}`}>
+                      <div><strong>{item.name}</strong><span>{item.sku} · {item.qty} × {money(item.price)}</span>{item.selectedOptions?.length > 0 && <small className="order-option-summary">{item.selectedOptions.map((option) => `${option.groupName}: ${option.optionName}`).join(" • ")}</small>}</div>
+                      <strong>{money(item.lineTotal)}</strong>
+                    </div>
+                  ))}
+                </div>
+                <div className="modal-totals">
+                  <div><span>Subtotal</span><strong>{money(selected.subtotal)}</strong></div>
+                  <div><span>Tax 6%</span><strong>{money(selected.tax)}</strong></div>
+                  <div className="total"><span>Grand Total</span><strong>{money(selected.grandTotal)}</strong></div>
+                </div>
+              </>
+            ) : modal === "payment" ? (
+              <>
+                <p className="eyebrow">PENDING PAYMENT</p>
+                <h3>Complete {selected.id}</h3>
+                <p className="muted">Confirm payment for this Pay Later order.</p>
+                <div className="payment-summary-box">
+                  <span>Amount to Pay</span>
+                  <strong>{money(selected.grandTotal)}</strong>
+                </div>
+                <button className="primary-btn full" onClick={completePayment}><CreditCard size={18} /> Complete Payment</button>
+              </>
+            ) : (
+              <>
+                <p className="eyebrow">PICK UP CONFIRMATION</p>
+                <h3>Complete Pick Up?</h3>
+                <p className="muted">Are you sure you want to change {selected.id} Pick Up status from Pending to Complete?</p>
+                <div className="confirmation-actions">
+                  <button className="secondary-btn" onClick={() => setModal(null)}>Cancel</button>
+                  <button className="primary-btn" onClick={confirmPickup}>Confirm Complete</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function Inventory({ products, setProducts }) {
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState({ key: "sku", direction: "asc" });
+  const [modal, setModal] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [errors, setErrors] = useState([]);
+  const [form, setForm] = useState({});
+  const [purchase, setPurchase] = useState({ quantity: "", uom: "order", supplier: "", reference: "", date: new Date().toISOString().slice(0, 10) });
+
+  const inventoryProducts = products.filter((p) => p.skuType === "inventory");
+  const shown = sortProducts(
+    inventoryProducts.filter((p) => `${p.name} ${p.sku} ${p.category}`.toLowerCase().includes(query.toLowerCase())),
+    sort.key,
+    sort.direction
+  );
+
+  function toggleSort(key) {
+    setSort((current) => current.key === key
+      ? { key, direction: current.direction === "asc" ? "desc" : "asc" }
+      : { key, direction: "asc" });
+  }
+
+  function SortIcon({ column }) {
+    if (sort.key !== column) return <ArrowUpDown size={13} />;
+    return sort.direction === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />;
+  }
+
+  function openAdd() {
+    setErrors([]);
+    setForm({ skuType: "inventory", sku: "", name: "", category: "", price: 0, stock: 0, minimum: "", orderUom: "", inventoryUom: "", recipeUom: "", orderToInventory: "", inventoryToRecipe: "", produced: 0, sold: 0, purchaseHistory: [] });
+    setModal("form");
+  }
+
+  function openEdit(product) {
+    setErrors([]);
+    setForm({ ...product });
+    setModal("form");
+  }
+
+  function saveSku(e) {
+    e.preventDefault();
+    const validation = validateSku(form, products);
+    if (validation.length) { setErrors(validation); return; }
+    const normalized = { ...form, skuType: "inventory", sku: form.sku.trim(), name: form.name.trim(), category: form.category.trim(), price: Number(form.price || 0), minimum: Number(form.minimum), stock: Number(form.stock || 0), orderToInventory: Number(form.orderToInventory), inventoryToRecipe: Number(form.inventoryToRecipe) };
+    if (form.id) setProducts((current) => current.map((p) => p.id === form.id ? normalized : p));
+    else setProducts((current) => [...current, { ...normalized, id: Date.now() }]);
+    setModal(null);
+  }
+
+  function viewSku(product) {
+    setSelected(product);
+    setModal("detail");
+  }
+
+  function openPurchase(product) {
+    setSelected(product);
+    setPurchase({ quantity: "", uom: "order", supplier: "", reference: "", date: new Date().toISOString().slice(0, 10) });
+    setErrors([]);
+    setModal("purchase");
+  }
+
+  function submitPurchase(e) {
+    e.preventDefault();
+    try {
+      setProducts((current) => current.map((p) => p.id === selected.id ? recordPurchase(p, purchase) : p));
+      setModal(null);
+    } catch (error) { setErrors([error.message]); }
+  }
+
+  function deleteSku(product) {
+    if (window.confirm(`Delete ${product.sku} - ${product.name}?`)) {
+      setProducts((current) => current.filter((p) => p.id !== product.id));
+    }
+  }
+
+  const header = (label, key) => (
+    <button className="sort-header" onClick={() => toggleSort(key)}>{label}<SortIcon column={key} /></button>
+  );
+
+  return (
+    <>
+      <section className="table-card">
+        <div className="section-head table-head">
+          <div>
+            <p className="eyebrow">STOCK CONTROL</p>
+            <h3>Inventory status</h3>
+          </div>
+          <div className="inventory-actions-top">
+            <div className="search-box compact">
+              <Search size={18} />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search inventory..." />
+            </div>
+            <button className="primary-btn" onClick={openAdd}><Plus size={17} /> Add SKU</button>
+          </div>
+        </div>
+
+        <div className="inventory-table">
+          <div className="table-row table-title">
+            <span>{header("SKU / Product", "sku")}</span><span>{header("Category", "category")}</span><span>{header("Stock", "stock")}</span><span>{header("Minimum", "minimum")}</span><span>{header("Status", "stock")}</span><span>Action</span>
+          </div>
+          {shown.map((p) => {
+            const status = p.stock === 0 ? "Out of stock" : p.stock <= p.minimum ? "Low stock" : "Healthy";
+            return (
+              <div className="table-row" key={p.id}>
+                <span data-label="SKU / Product"><strong>{p.name}</strong><small>{p.sku}</small></span>
+                <span data-label="Category">{p.category}</span>
+                <span data-label="Stock"><strong>{p.stock}</strong> <small>{p.inventoryUom}</small></span>
+                <span data-label="Minimum">{p.minimum}</span>
+                <span data-label="Status"><em className={`status ${status === "Healthy" ? "healthy" : status === "Low stock" ? "low" : "out"}`}>{status}</em></span>
+                <span data-label="Action" className="row-actions">
+                  <button title="View SKU" onClick={() => viewSku(p)}><Eye size={16} /></button>
+                  <button title="Edit SKU" onClick={() => openEdit(p)}><Pencil size={16} /></button>
+                  <button title="Record Purchase" onClick={() => openPurchase(p)}><ReceiptText size={16} /></button>
+                  <button className="danger-icon" title="Delete SKU" onClick={() => deleteSku(p)}><Trash2 size={16} /></button>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {modal && (
+        <div className="modal-backdrop" onMouseDown={() => setModal(null)}>
+          <div className="modal-card" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <div>
+                <p className="eyebrow">INVENTORY</p>
+                <h3>{modal === "detail" ? "SKU Detail" : modal === "purchase" ? "Record Purchase / Add Stock" : form.id ? "Edit SKU" : "Add SKU"}</h3>
+              </div>
+              <button className="icon-btn" onClick={() => setModal(null)}><X size={19} /></button>
+            </div>
+
+            {errors.length > 0 && <div className="form-error">{errors.map((e) => <div key={e}>{e}</div>)}</div>}
+
+            {modal === "form" && (
+              <form onSubmit={saveSku} className="sku-form">
+                <label>SKU Code<input value={form.sku ?? ""} onChange={(e) => setForm({ ...form, sku: e.target.value })} /></label>
+                <label>SKU Name<input value={form.name ?? ""} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
+                <label>Category<input value={form.category ?? ""} onChange={(e) => setForm({ ...form, category: e.target.value })} /></label>
+                <label>Selling Price (RM)<input type="number" step="0.01" min="0" value={form.price ?? ""} onChange={(e) => setForm({ ...form, price: e.target.value })} /></label>
+                <label>Minimum Stock<input type="number" min="0" value={form.minimum ?? ""} onChange={(e) => setForm({ ...form, minimum: e.target.value })} /></label>
+                <label>Current Stock<input type="number" min="0" value={form.stock ?? 0} onChange={(e) => setForm({ ...form, stock: e.target.value })} /></label>
+                <label>Order UOM<input placeholder="e.g. Carton" value={form.orderUom ?? ""} onChange={(e) => setForm({ ...form, orderUom: e.target.value })} /></label>
+                <label>Inventory UOM<input placeholder="e.g. Piece" value={form.inventoryUom ?? ""} onChange={(e) => setForm({ ...form, inventoryUom: e.target.value })} /></label>
+                <label>Recipe UOM<input placeholder="e.g. Gram" value={form.recipeUom ?? ""} onChange={(e) => setForm({ ...form, recipeUom: e.target.value })} /></label>
+                <label>Order → Inventory Qty<input type="number" min="0.0001" step="0.0001" placeholder="e.g. 5 packs per carton" value={form.orderToInventory ?? ""} onChange={(e) => setForm({ ...form, orderToInventory: e.target.value })} /></label>
+                <label>Inventory → Recipe Qty<input type="number" min="0.0001" step="0.0001" placeholder="e.g. 500 g per pack" value={form.inventoryToRecipe ?? ""} onChange={(e) => setForm({ ...form, inventoryToRecipe: e.target.value })} /></label>
+                <div className="conversion-preview"><span>Order → Recipe</span><strong>{Number(form.orderToInventory || 0) * Number(form.inventoryToRecipe || 0)} {form.recipeUom || "Recipe UOM"}</strong><small>1 {form.orderUom || "Order UOM"} = {form.orderToInventory || 0} {form.inventoryUom || "Inventory UOM"} × {form.inventoryToRecipe || 0} {form.recipeUom || "Recipe UOM"}</small></div>
+                <div className="modal-actions"><button type="button" className="secondary-btn" onClick={() => setModal(null)}>Cancel</button><button className="primary-btn" type="submit">Save SKU</button></div>
+              </form>
+            )}
+
+            {modal === "detail" && selected && (
+              <div className="sku-detail">
+                <div className="detail-hero"><div><span>{selected.sku}</span><h2>{selected.name}</h2><p>{selected.category}</p></div><strong>{selected.stock} {selected.inventoryUom}</strong></div>
+                <div className="detail-grid">
+                  <div><span>Order UOM</span><strong>{selected.orderUom || "-"}</strong></div>
+                  <div><span>Inventory UOM</span><strong>{selected.inventoryUom || "-"}</strong></div>
+                  <div><span>Recipe UOM</span><strong>{selected.recipeUom || "-"}</strong></div>
+                  <div><span>Order → Inventory</span><strong>1 {selected.orderUom} = {selected.orderToInventory} {selected.inventoryUom}</strong></div>
+                  <div><span>Inventory → Recipe</span><strong>1 {selected.inventoryUom} = {selected.inventoryToRecipe} {selected.recipeUom}</strong></div>
+                  <div><span>Order → Recipe</span><strong>1 {selected.orderUom} = {getOrderToRecipeFactor(selected)} {selected.recipeUom}</strong></div>
+                  <div><span>Selling Price</span><strong>{money(selected.price)}</strong></div>
+                  <div><span>Minimum Stock</span><strong>{selected.minimum}</strong></div>
+                  <div><span>Total Sold</span><strong>{selected.sold}</strong></div>
+                </div>
+                <div className="purchase-history">
+                  <h4>Purchase History</h4>
+                  {(selected.purchaseHistory || []).length === 0 ? <p className="muted">No purchase records yet.</p> : [...selected.purchaseHistory].reverse().map((r) => <div className="history-row" key={r.id}><div><strong>{r.reference}</strong><span>{r.supplier}</span></div><div><strong>+{r.inventoryQuantity ?? r.quantity} {selected.inventoryUom}</strong><span>{r.quantity} {r.uom === "order" ? selected.orderUom : selected.inventoryUom} • {r.date}</span></div></div>)}
+                </div>
+              </div>
+            )}
+
+            {modal === "purchase" && selected && (
+              <form onSubmit={submitPurchase} className="purchase-form">
+                <div className="purchase-sku"><span>{selected.sku}</span><strong>{selected.name}</strong><small>Current stock: {selected.stock} {selected.inventoryUom}</small></div>
+                <label>Purchase Quantity<input autoFocus type="number" min="0.01" step="0.01" value={purchase.quantity} onChange={(e) => setPurchase({ ...purchase, quantity: e.target.value })} /></label>
+                <label>Purchase UOM<select value={purchase.uom} onChange={(e) => setPurchase({ ...purchase, uom: e.target.value })}><option value="order">{selected.orderUom}</option><option value="inventory">{selected.inventoryUom}</option></select></label>
+                <div className="purchase-conversion"><strong>{purchase.uom === "order" ? Number(purchase.quantity || 0) * Number(selected.orderToInventory || 1) : Number(purchase.quantity || 0)} {selected.inventoryUom}</strong><span>will be added to inventory</span></div>
+                <label>Supplier<input value={purchase.supplier} onChange={(e) => setPurchase({ ...purchase, supplier: e.target.value })} placeholder="Supplier name" /></label>
+                <label>Purchase / PO Reference<input value={purchase.reference} onChange={(e) => setPurchase({ ...purchase, reference: e.target.value })} placeholder="e.g. PO-2026-001" /></label>
+                <label>Purchase Date<input type="date" value={purchase.date} onChange={(e) => setPurchase({ ...purchase, date: e.target.value })} /></label>
+                <div className="modal-actions"><button type="button" className="secondary-btn" onClick={() => setModal(null)}>Cancel</button><button className="primary-btn" type="submit">Record Purchase</button></div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+
+function RecipeManagement({ products, recipes, setRecipes, setProducts }) {
+  const productSkus = products.filter((p) => p.skuType !== "inventory");
+  const inventorySkus = products.filter((p) => p.skuType === "inventory");
+  const [selectedProductId, setSelectedProductId] = useState(productSkus[0]?.id ?? "");
+  const [mode, setMode] = useState("base");
+  const [selectedGroupId, setSelectedGroupId] = useState("");
+  const [selectedOptionId, setSelectedOptionId] = useState("");
+  const [draft, setDraft] = useState(() => recipes[productSkus[0]?.id] || []);
+  const [changeDraft, setChangeDraft] = useState([]);
+  const [message, setMessage] = useState("");
+  const selectedProduct = productSkus.find((p) => p.id === Number(selectedProductId));
+  const optionGroups = selectedProduct?.optionGroups || [];
+  const recipeGroups = optionGroups.filter((group) => group.recipeImpact);
+  const selectedGroup = recipeGroups.find((group) => group.id === selectedGroupId);
+  const selectedOption = selectedGroup?.options?.find((option) => option.id === selectedOptionId);
+
+  function chooseProduct(value) {
+    const id = Number(value);
+    setSelectedProductId(id); setDraft((recipes[id] || []).map((x) => ({ ...x }))); setMode("base"); setSelectedGroupId(""); setSelectedOptionId(""); setMessage("");
+  }
+
+  function addIngredient() {
+    const firstUnused = inventorySkus.find((inv) => !draft.some((line) => Number(line.inventorySkuId) === inv.id));
+    if (!firstUnused) return;
+    setDraft((current) => [...current, { inventorySkuId: firstUnused.id, qtyRecipeUom: 1 }]);
+  }
+  function updateLine(index, changes) { setDraft((current) => current.map((line, i) => i === index ? { ...line, ...changes } : line)); }
+  function removeLine(index) { setDraft((current) => current.filter((_, i) => i !== index)); }
+  function saveBaseRecipe() {
+    if (!selectedProduct) return;
+    if (!draft.length) { setMessage("Add at least one inventory SKU to the base recipe."); return; }
+    const invalid = draft.some((line) => !line.inventorySkuId || !Number.isFinite(Number(line.qtyRecipeUom)) || Number(line.qtyRecipeUom) <= 0);
+    const duplicate = new Set(draft.map((line) => Number(line.inventorySkuId))).size !== draft.length;
+    if (invalid) { setMessage("Every ingredient needs a valid Recipe UOM quantity greater than 0."); return; }
+    if (duplicate) { setMessage("The same inventory SKU cannot be added twice."); return; }
+    setRecipes((current) => ({ ...current, [selectedProduct.id]: draft.map((line) => ({ ...line, qtyRecipeUom: Number(line.qtyRecipeUom) })) }));
+    setMessage("Base recipe saved successfully.");
+  }
+  function chooseVariation(groupId, optionId) {
+    setSelectedGroupId(groupId); setSelectedOptionId(optionId);
+    const option = recipeGroups.find((g) => g.id === groupId)?.options?.find((o) => o.id === optionId);
+    setChangeDraft((option?.recipeChanges || []).map((x) => ({ ...x })));
+    setMessage("");
+  }
+  function addRecipeChange() {
+    const first = inventorySkus[0];
+    if (!first) return;
+    setChangeDraft((current) => [...current, { inventorySkuId: first.id, qtyRecipeUom: 1, mode: "add", replacesInventorySkuId: "" }]);
+  }
+  function updateChange(index, changes) { setChangeDraft((current) => current.map((line, i) => i === index ? { ...line, ...changes } : line)); }
+  function removeChange(index) { setChangeDraft((current) => current.filter((_, i) => i !== index)); }
+  function saveVariationRecipe() {
+    if (!selectedProduct || !selectedGroup || !selectedOption) return;
+    const invalid = changeDraft.some((line) => !line.inventorySkuId || !Number.isFinite(Number(line.qtyRecipeUom)) || Number(line.qtyRecipeUom) <= 0 || (line.mode === "replace" && !line.replacesInventorySkuId));
+    if (invalid) { setMessage("Every variation ingredient needs a valid quantity; replacements also need a base ingredient."); return; }
+    const updatedGroups = optionGroups.map((group) => group.id !== selectedGroup.id ? group : ({ ...group, options: group.options.map((option) => option.id !== selectedOption.id ? option : ({ ...option, recipeChanges: changeDraft.map((line) => ({ ...line, inventorySkuId: Number(line.inventorySkuId), qtyRecipeUom: Number(line.qtyRecipeUom), replacesInventorySkuId: line.replacesInventorySkuId ? Number(line.replacesInventorySkuId) : "" })) })) }));
+    setProducts((current) => current.map((product) => product.id === selectedProduct.id ? { ...product, optionGroups: updatedGroups } : product));
+    setMessage("Variation recipe saved successfully.");
+  }
+
+  return (
+    <div className="recipe-page">
+      <section className="recipe-header-card"><div><p className="eyebrow">RECIPE MANAGEMENT</p><h3>Product recipe setup</h3><p className="muted">Configure a base recipe, then optionally add ingredient changes for recipe-impacting Size / Variant / Flavour selections.</p></div><label className="product-select">Product SKU<select value={selectedProductId} onChange={(e) => chooseProduct(e.target.value)}>{productSkus.map((p) => <option value={p.id} key={p.id}>{p.sku} — {p.name}</option>)}</select></label></section>
+      <section className="recipe-card">
+        <div className="recipe-tabs"><button className={mode === "base" ? "selected" : ""} onClick={() => setMode("base")}>Base Recipe</button><button className={mode === "variation" ? "selected" : ""} disabled={!recipeGroups.length} onClick={() => setMode("variation")}>Variation Recipes {recipeGroups.length ? `(${recipeGroups.length})` : ""}</button></div>
+        {mode === "base" ? <>
+          <div className="section-head"><div><p className="eyebrow">{selectedProduct?.sku || "PRODUCT"}</p><h3>{selectedProduct?.name || "Select a Product SKU"}</h3></div><button className="secondary-btn" onClick={addIngredient} disabled={!inventorySkus.length}><Plus size={17} /> Add Ingredient</button></div>
+          <div className="recipe-lines">{draft.length === 0 && <div className="empty-recipe"><BookOpenText size={30} /><strong>No base recipe configured</strong><span>Add an Inventory SKU to start.</span></div>}{draft.map((line, index) => { const inventory = inventorySkus.find((p) => p.id === Number(line.inventorySkuId)); return <div className="recipe-line" key={`${line.inventorySkuId}-${index}`}><label>Inventory SKU<select value={line.inventorySkuId} onChange={(e) => updateLine(index, { inventorySkuId: Number(e.target.value) })}>{inventorySkus.map((p) => <option key={p.id} value={p.id}>{p.sku} — {p.name}</option>)}</select></label><label>Recipe Quantity<input type="number" min="0.0001" step="0.0001" value={line.qtyRecipeUom} onChange={(e) => updateLine(index, { qtyRecipeUom: e.target.value })} /></label><div className="recipe-uom-display"><span>Recipe UOM</span><strong>{inventory?.recipeUom || "-"}</strong><small>1 {inventory?.inventoryUom || "Inventory UOM"} = {inventory?.inventoryToRecipe || 0} {inventory?.recipeUom || "Recipe UOM"}</small></div><button className="danger-icon recipe-remove" onClick={() => removeLine(index)}><Trash2 size={17} /></button></div>; })}</div>
+          <div className="recipe-footer"><span>{draft.length} base ingredient{draft.length === 1 ? "" : "s"}</span><button className="primary-btn" onClick={saveBaseRecipe}>Save Base Recipe</button></div>
+        </> : <>
+          <div className="variation-recipe-picker"><label>Recipe-impacting group<select value={selectedGroupId} onChange={(e) => { const group = recipeGroups.find((g) => g.id === e.target.value); setSelectedGroupId(e.target.value); setSelectedOptionId(group?.options?.[0]?.id || ""); setChangeDraft((group?.options?.[0]?.recipeChanges || []).map((x) => ({ ...x }))); }}>{recipeGroups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label><label>Option<select value={selectedOptionId} onChange={(e) => chooseVariation(selectedGroupId, e.target.value)}>{selectedGroup?.options?.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label></div>
+          <div className="variation-recipe-banner"><strong>{selectedOption?.name || "Select an option"}</strong><span>Changes are applied on top of the Base Recipe.</span></div>
+          <div className="section-head"><div><p className="eyebrow">VARIATION INGREDIENT CHANGES</p><h3>{selectedGroup?.name || "Option Group"} → {selectedOption?.name || "Option"}</h3></div><button className="secondary-btn" onClick={addRecipeChange} disabled={!inventorySkus.length}><Plus size={17} /> Add Change</button></div>
+          <div className="recipe-lines">{!changeDraft.length && <div className="empty-recipe"><BookOpenText size={30} /><strong>No variation changes</strong><span>This option will use the base recipe exactly.</span></div>}{changeDraft.map((line, index) => <div className="recipe-line variation-line" key={`${line.inventorySkuId}-${index}`}><label>Ingredient<select value={line.inventorySkuId} onChange={(e) => updateChange(index, { inventorySkuId: Number(e.target.value) })}>{inventorySkus.map((p) => <option key={p.id} value={p.id}>{p.sku} — {p.name}</option>)}</select></label><label>Action<select value={line.mode} onChange={(e) => updateChange(index, { mode: e.target.value, replacesInventorySkuId: e.target.value === "add" ? "" : line.replacesInventorySkuId })}><option value="add">Add</option><option value="replace">Replace</option></select></label>{line.mode === "replace" ? <label>Replace Base Ingredient<select value={line.replacesInventorySkuId} onChange={(e) => updateChange(index, { replacesInventorySkuId: Number(e.target.value) })}><option value="">Select ingredient</option>{draft.map((baseLine) => { const inv = inventorySkus.find((p) => p.id === Number(baseLine.inventorySkuId)); return <option key={baseLine.inventorySkuId} value={baseLine.inventorySkuId}>{inv?.name || baseLine.inventorySkuId}</option>; })}</select></label> : <span className="recipe-spacer" />}{<label>Qty<input type="number" min="0.0001" step="0.0001" value={line.qtyRecipeUom} onChange={(e) => updateChange(index, { qtyRecipeUom: e.target.value })} /></label>}<button className="danger-icon recipe-remove" onClick={() => removeChange(index)}><Trash2 size={17} /></button></div>)}</div>
+          <div className="recipe-footer"><span>{changeDraft.length} variation change{changeDraft.length === 1 ? "" : "s"}</span><button className="primary-btn" onClick={saveVariationRecipe}>Save Variation Recipe</button></div>
+        </>}
+        {message && <div className={message.includes("successfully") ? "success-message" : "form-error"}>{message}</div>}
+      </section>
+    </div>
+  );
+}
+
+function Production({ products, setProducts, recipes }) {
+  const [amounts, setAmounts] = useState({});
+  const [feedback, setFeedback] = useState({});
+  const [viewMode, setViewMode] = useState("tiles");
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState({ key: "name", direction: "asc" });
+  const [modal, setModal] = useState(null);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [formError, setFormError] = useState("");
+  const [productForm, setProductForm] = useState({ sku: "", name: "", category: "", price: "", minimum: 0, optionGroups: [] });
+  const [productionSelectionProduct, setProductionSelectionProduct] = useState(null);
+  const [productionSelections, setProductionSelections] = useState({});
+  const productSkus = products.filter((p) => p.skuType !== "inventory");
+  const visibleProductSkus = useMemo(() => filterAndSortProductSkus(products, recipes, query, sort), [products, recipes, query, sort]);
+
+  function toggleSort(key) {
+    setSort((current) => current.key === key
+      ? { key, direction: current.direction === "asc" ? "desc" : "asc" }
+      : { key, direction: "asc" });
+  }
+
+  function SortIcon({ column }) {
+    if (sort.key !== column) return <ArrowUpDown size={13} />;
+    return sort.direction === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />;
+  }
+
+  function recordProduction(product, selected = {}) {
+    const qty = Number(amounts[product.id] || 0);
+    if (!qty || qty < 1) return;
+    try {
+      const result = applyProductionWithRecipe(products, recipes, product.id, qty, product.optionGroups || [], selected);
+      setProducts(result.products);
+      const detail = result.usage.map((u) => `${u.inventoryName}: -${Number(u.qtyInventoryUom.toFixed(4))} ${u.inventoryUom}`).join(" • ");
+      const optionText = (product.optionGroups || []).flatMap((g) => { const o = g.options?.find((x) => x.id === selected[g.id]); return o ? [`${g.name}: ${o.name}`] : []; }).join(" • ");
+      setFeedback((current) => ({ ...current, [product.id]: { ok: true, text: `Produced ${qty}${optionText ? ` (${optionText})` : ""}. ${detail}` } }));
+      setAmounts((current) => ({ ...current, [product.id]: "" }));
+      setProductionSelectionProduct(null); setProductionSelections({});
+    } catch (error) { setFeedback((current) => ({ ...current, [product.id]: { ok: false, text: error.message } })); }
+  }
+
+  function submit(product) {
+    const qty = Number(amounts[product.id] || 0);
+    if (!qty || qty < 1) return;
+    if ((product.optionGroups || []).length) {
+      const defaults = {};
+      (product.optionGroups || []).forEach((group) => { if (!group.required && group.options?.length === 0) defaults[group.id] = ""; });
+      setProductionSelections(defaults); setProductionSelectionProduct(product); return;
+    }
+    recordProduction(product, {});
+  }
+
+  function openAdd() {
+    setSelectedProduct(null);
+    setProductForm({ sku: "", name: "", category: "", price: "", minimum: 0, optionGroups: [] });
+    setFormError("");
+    setModal("product");
+  }
+
+  function openEdit(product) {
+    setSelectedProduct(product);
+    setProductForm({ sku: product.sku, name: product.name, category: product.category, price: product.price, minimum: product.minimum ?? 0, optionGroups: (product.optionGroups || []).map((g) => ({ ...g, options: (g.options || []).map((o) => ({ ...o, recipeChanges: (o.recipeChanges || []).map((c) => ({ ...c })) })) })) });
+    setFormError("");
+    setModal("product");
+  }
+
+  function saveProduct(event) {
+    event.preventDefault();
+    const error = validateProductSku(productForm, products, selectedProduct?.id ?? null);
+    const optionError = validateProductOptions(productForm.optionGroups || []);
+    if (error || optionError) { setFormError(error || optionError); return; }
+    const normalized = {
+      sku: productForm.sku.trim(),
+      name: productForm.name.trim(),
+      category: productForm.category.trim(),
+      price: Number(productForm.price),
+      minimum: Number(productForm.minimum || 0),
+      optionGroups: productForm.optionGroups || [],
+    };
+    if (selectedProduct) {
+      setProducts((current) => current.map((p) => p.id === selectedProduct.id ? { ...p, ...normalized } : p));
+    } else {
+      const nextId = Math.max(0, ...products.map((p) => Number(p.id) || 0)) + 1;
+      setProducts((current) => [...current, {
+        id: nextId,
+        skuType: "product",
+        ...normalized,
+        stock: 0,
+        produced: 0,
+        sold: 0,
+        optionGroups: normalized.optionGroups,
+      }]);
+    }
+    setModal(null);
+  }
+
+  function updateOptionGroup(groupIndex, changes) { setProductForm((current) => ({ ...current, optionGroups: current.optionGroups.map((group, index) => index === groupIndex ? { ...group, ...changes } : group) })); }
+  function addOptionGroup() {
+    const index = (productForm.optionGroups || []).length + 1;
+    setProductForm((current) => ({ ...current, optionGroups: [...(current.optionGroups || []), { id: `group-${Date.now()}-${index}`, name: `Option Group ${index}`, required: false, priceImpact: true, recipeImpact: false, options: [{ id: `option-${Date.now()}-${index}`, name: "Option 1", priceAdjustment: 0, recipeChanges: [] }] }] }));
+  }
+  function removeOptionGroup(groupIndex) { setProductForm((current) => ({ ...current, optionGroups: current.optionGroups.filter((_, index) => index !== groupIndex) })); }
+  function addOption(groupIndex) { setProductForm((current) => ({ ...current, optionGroups: current.optionGroups.map((group, index) => index === groupIndex ? { ...group, options: [...group.options, { id: `option-${Date.now()}-${groupIndex}-${group.options.length}`, name: `Option ${group.options.length + 1}`, priceAdjustment: 0, recipeChanges: [] }] } : group) })); }
+  function updateOption(groupIndex, optionIndex, changes) { setProductForm((current) => ({ ...current, optionGroups: current.optionGroups.map((group, gi) => gi !== groupIndex ? group : { ...group, options: group.options.map((option, oi) => oi === optionIndex ? { ...option, ...changes } : option) }) })); }
+  function removeOption(groupIndex, optionIndex) { setProductForm((current) => ({ ...current, optionGroups: current.optionGroups.map((group, gi) => gi !== groupIndex ? group : { ...group, options: group.options.filter((_, oi) => oi !== optionIndex) }) })); }
+
+  function deleteProduct(product) {
+    const blocked = canDeleteProductSku(product, recipes[product.id] || []);
+    if (blocked) {
+      setFeedback((current) => ({ ...current, [product.id]: { ok: false, text: blocked } }));
+      return;
+    }
+    if (window.confirm(`Delete ${product.sku} - ${product.name}?`)) {
+      setProducts((current) => current.filter((p) => p.id !== product.id));
+    }
+  }
+
+  function openRecipe(product) {
+    if (!(recipes[product.id] || []).length) return;
+    setSelectedProduct(product);
+    setModal("recipe");
+  }
+
+  function RecipeStatusButton({ product }) {
+    const recipe = recipes[product.id] || [];
+    const configured = recipe.length > 0;
+    return (
+      <button
+        type="button"
+        className={`recipe-status ${configured ? "configured" : "not-configured"}`}
+        onClick={() => openRecipe(product)}
+        disabled={!configured}
+        title={configured ? "View recipe detail" : "Configure recipe in Recipe Management"}
+      >
+        {getRecipeStatus(recipe)}
+      </button>
+    );
+  }
+
+  return (
+    <div className="production-page">
+      <section className="production-summary production-toolbar">
+        <div>
+          <p className="eyebrow">PRODUCT SKU</p>
+          <h3>Production SKU management</h3>
+          <p className="muted">Maintain Product SKUs and record production. Recipe ingredients are deducted from Inventory when production is recorded.</p>
+        </div>
+        <div className="production-toolbar-actions">
+          <div className="search-box production-search">
+            <Search size={18} />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search SKU, product, category or recipe status..." />
+          </div>
+          <div className="view-toggle" aria-label="Production view">
+            <button className={viewMode === "tiles" ? "selected" : ""} onClick={() => setViewMode("tiles")} title="Tile view"><Grid3X3 size={18} /></button>
+            <button className={viewMode === "list" ? "selected" : ""} onClick={() => setViewMode("list")} title="List view"><List size={18} /></button>
+          </div>
+          <button className="primary-btn" onClick={openAdd}><Plus size={17} /> Add Product SKU</button>
+        </div>
+      </section>
+
+      <section className="production-summary production-kpis">
+        <div className="production-metrics">
+          <div><strong>{productSkus.reduce((a, p) => a + Number(p.produced || 0), 0)}</strong><span>Produced</span></div>
+          <div><strong>{productSkus.reduce((a, p) => a + Number(p.sold || 0), 0)}</strong><span>Sold</span></div>
+          <div><strong>{productSkus.reduce((a, p) => a + Number(p.stock || 0), 0)}</strong><span>Remaining</span></div>
+        </div>
+      </section>
+
+      {viewMode === "tiles" ? (
+        <section className="production-grid">
+          {visibleProductSkus.map((p) => (
+            <article className="production-card" key={p.id}>
+              <div className="section-head product-card-head">
+                <div>
+                  <span className="product-category">{p.category}</span>
+                  <h3>{p.name}</h3>
+                  <p className="muted">{p.sku}</p>
+                </div>
+                <div className="product-crud-actions">
+                  <button className="icon-btn" title="Edit Product SKU" onClick={() => openEdit(p)}><Pencil size={16} /></button>
+                  <button className="icon-btn danger-icon" title="Delete Product SKU" onClick={() => deleteProduct(p)}><Trash2 size={16} /></button>
+                </div>
+              </div>
+              <div className="production-bars">
+                <div><span>Produced</span><strong>{p.produced}</strong></div>
+                <div><span>Remaining</span><strong>{p.stock}</strong></div>
+              </div>
+              <RecipeStatusButton product={p} />
+              {feedback[p.id] && <div className={feedback[p.id].ok ? "production-feedback ok" : "production-feedback error"}>{feedback[p.id].text}</div>}
+              <div className="production-entry">
+                <input type="number" min="1" value={amounts[p.id] ?? ""} onChange={(e) => setAmounts((current) => ({ ...current, [p.id]: e.target.value }))} placeholder="Qty produced" />
+                <button className="primary-btn" onClick={() => submit(p)}>Record</button>
+              </div>
+            </article>
+          ))}
+        </section>
+      ) : (
+        <section className="production-list-card">
+          <div className="production-list-row production-list-head">
+            <button onClick={() => toggleSort("sku")}>SKU <SortIcon column="sku" /></button>
+            <button onClick={() => toggleSort("name")}>Product Name <SortIcon column="name" /></button>
+            <button onClick={() => toggleSort("category")}>Category <SortIcon column="category" /></button>
+            <button onClick={() => toggleSort("price")}>Price <SortIcon column="price" /></button>
+            <button onClick={() => toggleSort("produced")}>Produced <SortIcon column="produced" /></button>
+            <button onClick={() => toggleSort("sold")}>Sold <SortIcon column="sold" /></button>
+            <button onClick={() => toggleSort("stock")}>Remaining <SortIcon column="stock" /></button>
+            <button onClick={() => toggleSort("recipeStatus")}>Recipe Status <SortIcon column="recipeStatus" /></button>
+            <span>Record Production</span><span>Action</span>
+          </div>
+          {visibleProductSkus.map((p) => (
+            <div className="production-list-row" key={p.id}>
+              <span data-label="SKU"><strong>{p.sku}</strong></span>
+              <span data-label="Product Name"><strong>{p.name}</strong></span>
+              <span data-label="Category">{p.category}</span>
+              <span data-label="Price"><strong>{money(p.price)}</strong></span>
+              <span data-label="Produced"><strong>{p.produced}</strong></span>
+              <span data-label="Sold"><strong>{p.sold}</strong></span>
+              <span data-label="Remaining"><strong>{p.stock}</strong></span>
+              <span data-label="Recipe Status"><RecipeStatusButton product={p} /></span>
+              <span data-label="Record Production" className="list-production-entry">
+                <input type="number" min="1" value={amounts[p.id] ?? ""} onChange={(e) => setAmounts((current) => ({ ...current, [p.id]: e.target.value }))} placeholder="Qty" />
+                <button className="primary-btn" onClick={() => submit(p)}>Record</button>
+                {feedback[p.id] && <small className={feedback[p.id].ok ? "feedback-text ok" : "feedback-text error"}>{feedback[p.id].text}</small>}
+              </span>
+              <span data-label="Action" className="product-crud-actions">
+                <button className="icon-btn" title="Edit Product SKU" onClick={() => openEdit(p)}><Pencil size={16} /></button>
+                <button className="icon-btn danger-icon" title="Delete Product SKU" onClick={() => deleteProduct(p)}><Trash2 size={16} /></button>
+              </span>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {modal && (
+        <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setModal(null)}>
+          <div className={`modal-card ${modal === "recipe" ? "recipe-detail-modal" : ""}`}>
+            <div className="modal-head">
+              <div>
+                <p className="eyebrow">{modal === "recipe" ? "RECIPE DETAIL" : selectedProduct ? "EDIT PRODUCT SKU" : "ADD PRODUCT SKU"}</p>
+                <h3>{modal === "recipe" ? `${selectedProduct?.sku} — ${selectedProduct?.name}` : selectedProduct ? selectedProduct.name : "New Product SKU"}</h3>
+              </div>
+              <button className="icon-btn" onClick={() => setModal(null)}><X size={18} /></button>
+            </div>
+
+            {modal === "product" && (
+              <form className="sku-form" onSubmit={saveProduct}>
+                <label>Product SKU Code<input autoFocus value={productForm.sku} onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })} placeholder="e.g. BUR-002" /></label>
+                <label>Product Name<input value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} placeholder="Product description" /></label>
+                <label>Category<input value={productForm.category} onChange={(e) => setProductForm({ ...productForm, category: e.target.value })} placeholder="e.g. Burger" /></label>
+                <label>Selling Price (RM)<input type="number" min="0" step="0.01" value={productForm.price} onChange={(e) => setProductForm({ ...productForm, price: e.target.value })} /></label>
+                <label>Minimum Product Stock<input type="number" min="0" step="1" value={productForm.minimum} onChange={(e) => setProductForm({ ...productForm, minimum: e.target.value })} /></label>
+                <div className="option-editor">
+                  <div className="section-head option-editor-head"><div><p className="eyebrow">SELLING OPTIONS</p><strong>Size / Variant / Flavour</strong><span className="muted">Optional. Recipe-impacting options can define ingredient changes in Recipe Management.</span></div><button type="button" className="secondary-btn" onClick={addOptionGroup}><Plus size={16} /> Add Group</button></div>
+                  {!productForm.optionGroups?.length && <div className="empty-recipe">No selling options configured. This SKU will sell at its base price.</div>}
+                  {(productForm.optionGroups || []).map((group, gi) => <div className="option-editor-group" key={group.id}>
+                    <div className="option-editor-group-head"><input value={group.name} onChange={(e) => updateOptionGroup(gi, { name: e.target.value })} placeholder="Group name" /><label className="inline-check"><input type="checkbox" checked={!!group.required} onChange={(e) => updateOptionGroup(gi, { required: e.target.checked })} /> Required</label><label className="inline-check"><input type="checkbox" checked={!!group.priceImpact} onChange={(e) => updateOptionGroup(gi, { priceImpact: e.target.checked })} /> Price impact</label><label className="inline-check"><input type="checkbox" checked={!!group.recipeImpact} onChange={(e) => updateOptionGroup(gi, { recipeImpact: e.target.checked })} /> Recipe impact</label><button type="button" className="danger-icon" onClick={() => removeOptionGroup(gi)}><Trash2 size={16} /></button></div>
+                    <div className="option-editor-options">{group.options.map((option, oi) => <div className="option-editor-row" key={option.id}><input value={option.name} onChange={(e) => updateOption(gi, oi, { name: e.target.value })} placeholder="Option name" /><label>Adjustment<input type="number" min="0" step="0.01" disabled={!group.priceImpact} value={option.priceAdjustment} onChange={(e) => updateOption(gi, oi, { priceAdjustment: e.target.value })} /></label><button type="button" className="danger-icon" onClick={() => removeOption(gi, oi)}><Trash2 size={15} /></button></div>)}</div>
+                    <button type="button" className="text-btn" onClick={() => addOption(gi)}><Plus size={15} /> Add option</button>
+                  </div>)}
+                </div>
+                {formError && <div className="form-error product-form-error">{formError}</div>}
+                <div className="modal-actions"><button type="button" className="secondary-btn" onClick={() => setModal(null)}>Cancel</button><button className="primary-btn" type="submit">{selectedProduct ? "Save Changes" : "Add Product SKU"}</button></div>
+              </form>
+            )}
+
+            {modal === "recipe" && selectedProduct && (
+              <div className="recipe-detail-list">
+                {(recipes[selectedProduct.id] || []).map((line) => {
+                  const inv = products.find((x) => x.id === line.inventorySkuId);
+                  return (
+                    <div className="recipe-detail-row" key={line.inventorySkuId}>
+                      <div><strong>{inv?.name || "Inventory SKU"}</strong><span>{inv?.sku || "-"}</span></div>
+                      <strong>{line.qtyRecipeUom} {inv?.recipeUom || ""}</strong>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {productionSelectionProduct && <OptionSelectionModal product={productionSelectionProduct} selections={productionSelections} setSelections={setProductionSelections} title="Select Production Variation" actionLabel="Record Production" onCancel={() => setProductionSelectionProduct(null)} onConfirm={() => recordProduction(productionSelectionProduct, productionSelections)} />}
+    </div>
+  );
+}
+function App() {
+  const [user, setUser] = useState(null);
+  const [page, setPage] = useState("dashboard");
+  const [products, setProducts] = useState(productsSeed);
+  const [orders, setOrders] = useState([]);
+  const [recipes, setRecipes] = useState({
+    1: [
+      { inventorySkuId: 101, qtyRecipeUom: 200 },
+      { inventorySkuId: 102, qtyRecipeUom: 80 },
+      { inventorySkuId: 103, qtyRecipeUom: 50 },
+      { inventorySkuId: 106, qtyRecipeUom: 1 },
+    ],
+    2: [
+      { inventorySkuId: 101, qtyRecipeUom: 180 },
+      { inventorySkuId: 102, qtyRecipeUom: 70 },
+      { inventorySkuId: 103, qtyRecipeUom: 60 },
+      { inventorySkuId: 106, qtyRecipeUom: 1 },
+    ],
+    3: [
+      { inventorySkuId: 101, qtyRecipeUom: 220 },
+      { inventorySkuId: 102, qtyRecipeUom: 50 },
+      { inventorySkuId: 103, qtyRecipeUom: 30 },
+      { inventorySkuId: 106, qtyRecipeUom: 1 },
+    ],
+    4: [
+      { inventorySkuId: 101, qtyRecipeUom: 180 },
+      { inventorySkuId: 102, qtyRecipeUom: 70 },
+      { inventorySkuId: 103, qtyRecipeUom: 40 },
+      { inventorySkuId: 106, qtyRecipeUom: 1 },
+    ],
+    5: [
+      { inventorySkuId: 101, qtyRecipeUom: 220 },
+      { inventorySkuId: 102, qtyRecipeUom: 60 },
+      { inventorySkuId: 103, qtyRecipeUom: 30 },
+      { inventorySkuId: 106, qtyRecipeUom: 1 },
+    ],
+    6: [
+      { inventorySkuId: 101, qtyRecipeUom: 180 },
+      { inventorySkuId: 104, qtyRecipeUom: 5 },
+      { inventorySkuId: 105, qtyRecipeUom: 2 },
+      { inventorySkuId: 106, qtyRecipeUom: 1 },
+    ],
+    7: [
+      { inventorySkuId: 101, qtyRecipeUom: 150 },
+      { inventorySkuId: 104, qtyRecipeUom: 4 },
+      { inventorySkuId: 105, qtyRecipeUom: 1 },
+      { inventorySkuId: 106, qtyRecipeUom: 1 },
+    ],
+    8: [
+      { inventorySkuId: 101, qtyRecipeUom: 160 },
+      { inventorySkuId: 104, qtyRecipeUom: 4 },
+      { inventorySkuId: 106, qtyRecipeUom: 1 },
+    ],
+  });
+
+  if (!user) return <Login onLogin={setUser} />;
+
+  return (
+    <AppShell user={user} page={page} setPage={setPage} onLogout={() => { setUser(null); setPage("dashboard"); }}>
+      {page === "dashboard" && <Dashboard products={products} orders={orders} recipes={recipes} onNavigate={setPage} />}
+      {page === "order" && <OrderTaking products={products} setProducts={setProducts} orders={orders} setOrders={setOrders} onNavigate={setPage} />}
+      {page === "orderHistory" && <OrderHistory orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} />}
+      {page === "inventory" && <Inventory products={products} setProducts={setProducts} />}
+      {page === "recipe" && <RecipeManagement products={products} recipes={recipes} setRecipes={setRecipes} setProducts={setProducts} />}
+      {page === "production" && <Production products={products} setProducts={setProducts} recipes={recipes} />}
+    </AppShell>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
