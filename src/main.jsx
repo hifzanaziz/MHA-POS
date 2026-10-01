@@ -281,7 +281,7 @@ function StatCard({ label, value, sub, icon: Icon, danger }) {
   );
 }
 
-function Dashboard({ products, orders, recipes, onNavigate }) {
+function Dashboard({ products, orders, recipes, inventoryUsage, onNavigate }) {
   const [trendRange, setTrendRange] = useState("7d");
   const completedOrders = orders.filter((order) => order.paymentStatus === "Completed");
   const sold = completedOrders.reduce(
@@ -302,7 +302,9 @@ function Dashboard({ products, orders, recipes, onNavigate }) {
     .sort((a, b) => b.sold - a.sold || String(a.name).localeCompare(String(b.name)))
     .slice(0, 5)
     .map((item) => ({ ...item, label: item.name }));
-  const topInventory = getTopInventoryUsage(products, recipes).map((item) => ({ ...item, label: `${item.name} (${item.uom})` }));
+  const topInventory = (inventoryUsage || [])
+    .slice(0, 5)
+    .map((item) => ({ ...item, label: `${item.name} (${item.uom})` }));
   const sellingTrend = getSellingTrend(orders, trendRange);
   const alerts = getStockAlerts(products);
   const totalAlerts = alerts.inventory.length + alerts.product.length;
@@ -2177,7 +2179,7 @@ function App() {
   const [user, setUser] = useState(null);
   const [page, setPage] = useState("dashboard");
   const [products, setProducts] = useState(productsSeed);
-  const [orders, setOrders] = useState([]);
+  const [orders, setOrders] = useState([]);\n  const [inventoryUsage, setInventoryUsage] = useState([]);
   const [recipes, setRecipes] = useState({
     1: [
       { inventorySkuId: 101, qtyRecipeUom: 200 },
@@ -2243,14 +2245,36 @@ function App() {
     })));
   }
 
-  useEffect(() => { if (user) loadOrders(); }, [user]);
+  async function loadInventoryUsage() {
+    const { data, error } = await supabase
+      .from("stock_transaction")
+      .select("inventory_sku_id, quantity, inventory_sku(sku_code, sku_name, recipe_uom)")
+      .eq("transaction_type", "PRODUCTION");
+    if (error) { console.error("Load inventory usage error:", error); return; }
+    const totals = new Map();
+    (data || []).forEach((row) => {
+      const sku = row.inventory_sku;
+      const current = totals.get(row.inventory_sku_id) || {
+        id: row.inventory_sku_id,
+        sku: sku?.sku_code || "",
+        name: sku?.sku_name || "Inventory SKU",
+        usage: 0,
+        uom: sku?.recipe_uom || "",
+      };
+      current.usage += Number(row.quantity || 0);
+      totals.set(row.inventory_sku_id, current);
+    });
+    setInventoryUsage([...totals.values()].sort((a, b) => b.usage - a.usage || String(a.name).localeCompare(String(b.name))));
+  }
+
+  useEffect(() => { if (user) { loadOrders(); loadInventoryUsage(); } }, [user]);
 
 
   if (!user) return <Login onLogin={setUser} />;
 
   return (
     <AppShell user={user} page={page} setPage={setPage} onLogout={() => { setUser(null); setPage("dashboard"); }}>
-      {page === "dashboard" && <Dashboard products={products} orders={orders} recipes={recipes} onNavigate={setPage} reloadOrders={loadOrders} />}
+      {page === "dashboard" && <Dashboard products={products} orders={orders} recipes={recipes} inventoryUsage={inventoryUsage} onNavigate={setPage} />}
       {page === "order" && <OrderTaking products={products} setProducts={setProducts} orders={orders} setOrders={setOrders} onNavigate={setPage} />}
       {page === "orderHistory" && <OrderHistory orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} reloadOrders={loadOrders} />}
       {page === "inventory" && <Inventory products={products} setProducts={setProducts} />}
