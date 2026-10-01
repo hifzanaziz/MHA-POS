@@ -2624,6 +2624,25 @@ function App() {
 
   useEffect(() => { if (user) { loadMasterData(); loadOrders(); loadInventoryUsage(); loadConfig(); } }, [user]);
 
+  useEffect(() => {
+    if (!user || isPublicOrder) return;
+
+    const channel = supabase
+      .channel("staff-sales-order-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "sales_order" },
+        () => {
+          loadOrders();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, isPublicOrder]);
+
 
   if (isPublicOrder) return <PublicOrderPage />;
   if (!user) return <Login onLogin={setUser} />;
