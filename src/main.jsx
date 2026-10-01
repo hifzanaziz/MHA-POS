@@ -2429,25 +2429,19 @@ function App() {
   }
 
   async function loadInventoryUsage() {
-    const { data, error } = await supabase
-      .from("stock_transaction")
-      .select("inventory_sku_id, quantity, inventory_sku(sku_code, sku_name, recipe_uom)")
-      .eq("transaction_type", "PRODUCTION");
-    if (error) { console.error("Load inventory usage error:", error); return; }
-    const totals = new Map();
-    (data || []).forEach((row) => {
-      const sku = row.inventory_sku;
-      const current = totals.get(row.inventory_sku_id) || {
-        id: row.inventory_sku_id,
-        sku: sku?.sku_code || "",
-        name: sku?.sku_name || "Inventory SKU",
-        usage: 0,
-        uom: sku?.recipe_uom || "",
-      };
-      current.usage += Number(row.quantity || 0);
-      totals.set(row.inventory_sku_id, current);
-    });
-    setInventoryUsage([...totals.values()].sort((a, b) => b.usage - a.usage || String(a.name).localeCompare(String(b.name))));
+    const { data, error } = await supabase.rpc("get_inventory_production_usage");
+    if (error) {
+      console.error("Load inventory usage error:", error);
+      setInventoryUsage([]);
+      return;
+    }
+    setInventoryUsage((data || []).map((row) => ({
+      id: row.inventory_sku_id,
+      sku: row.sku_code || "",
+      name: row.sku_name || "Inventory SKU",
+      usage: Number(row.usage || 0),
+      uom: row.recipe_uom || "",
+    })));
   }
 
   useEffect(() => { if (user) { loadMasterData(); loadOrders(); loadInventoryUsage(); } }, [user]);
