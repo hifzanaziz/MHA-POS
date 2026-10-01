@@ -494,7 +494,7 @@ function OptionSelectionModal({ product, selections, setSelections, onCancel, on
             </div>
           </div>
         )}
-        <div className="option-total"><span>Final Unit Price</span><strong>{money(finalPrice)}</strong></div>
+        <div className="option-total"><span>{setQuantity ? "Total Price" : "Final Unit Price"}</span><strong>{money(finalPrice * (setQuantity ? Math.max(1, Number(quantity || 1)) : 1))}</strong></div>
         <div className="modal-actions"><button className="secondary-btn" onClick={onCancel}>Cancel</button><button className="primary-btn" disabled={!!validation} onClick={() => onConfirm(finalPrice)}>{actionLabel}</button></div>
       </div>
     </div>
