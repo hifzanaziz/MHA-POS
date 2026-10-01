@@ -1418,7 +1418,15 @@ const { data: productionEntryData, error: productionEntryError } =
 
 if (productionEntryError) throw productionEntryError;
 
-    // 4. Convert Supabase structure to the structure
+// 7. Load current finished-goods stock for each exact variant
+const { data: variantStockData, error: variantStockError } =
+  await supabase
+    .from("product_variant_stock")
+    .select("product_variant_id, current_stock, minimum_stock");
+
+if (variantStockError) throw variantStockError;
+
+    // Convert Supabase structure to the structure
     // already expected by the MHA POS frontend.
     const supabaseProducts = (productData || []).map((item) => {
       const productTypes = (typeData || []).filter(
@@ -1479,11 +1487,17 @@ if (productionEntryError) throw productionEntryError;
       }
     });
 
+    const stockRow = (variantStockData || []).find(
+      (row) => row.product_variant_id === variant.id
+    );
+
     return {
       id: variant.id,
       code: variant.variant_code,
       name: variant.variant_name || "",
       price: Number(variant.selling_price || 0),
+      stock: Number(stockRow?.current_stock || 0),
+      minimumStock: Number(stockRow?.minimum_stock || 0),
       selections,
     };
   });
@@ -1498,6 +1512,11 @@ if (productionEntryError) throw productionEntryError;
           0
         );
 
+      const totalRemaining = variants.reduce(
+        (total, variant) => total + Number(variant.stock || 0),
+        0
+      );
+
       return {
         id: item.id,
         skuType: "product",
@@ -1508,7 +1527,7 @@ if (productionEntryError) throw productionEntryError;
 
         price: Number(item.base_price || 0),
 
-        stock: 0,
+        stock: totalRemaining,
         minimum: 0,
         produced: totalProduced,
         sold: 0,
@@ -1610,14 +1629,37 @@ async function recordProduction(product, selected = {}) {
 
     if (inventoryError) throw inventoryError;
 
+    const { data: variantStockData, error: variantStockError } =
+      await supabase
+        .from("product_variant_stock")
+        .select("product_variant_id, current_stock, minimum_stock");
+
+    if (variantStockError) throw variantStockError;
+
     setProducts((current) =>
       current.map((item) => {
         if (item.skuType !== "inventory") {
           if (item.id === product.id) {
+            const refreshedVariants = (item.variants || []).map((variant) => {
+              const stockRow = (variantStockData || []).find(
+                (row) => row.product_variant_id === variant.id
+              );
+
+              return {
+                ...variant,
+                stock: Number(stockRow?.current_stock || 0),
+                minimumStock: Number(stockRow?.minimum_stock || 0),
+              };
+            });
+
             return {
               ...item,
               produced: Number(item.produced || 0) + qty,
-              stock: Number(item.stock || 0) + qty,
+              stock: refreshedVariants.reduce(
+                (total, variant) => total + Number(variant.stock || 0),
+                0
+              ),
+              variants: refreshedVariants,
             };
           }
 
