@@ -457,7 +457,7 @@ function Dashboard({ products, orders, recipes, inventoryUsage, onNavigate }) {
   );
 }
 
-function OptionSelectionModal({ product, selections, setSelections, onCancel, onConfirm, title = "Select Options", actionLabel = "Add to Order" }) {
+function OptionSelectionModal({ product, selections, setSelections, onCancel, onConfirm, title = "Select Options", actionLabel = "Add to Order", quantity = 1, setQuantity = null, maxQuantity = null }) {
   const groups = product?.optionGroups || [];
   const validation = validateOptionSelections(groups, selections);
   const finalPrice = calculateOptionPrice(product?.price || 0, groups, selections);
@@ -481,6 +481,19 @@ function OptionSelectionModal({ product, selections, setSelections, onCancel, on
           ))}
         </div>
         {validation && <div className="form-error">{validation}</div>}
+        {setQuantity && (
+          <div className="option-total">
+            <span>Quantity</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <button type="button" className="secondary-btn" style={{ minWidth: 44, padding: "8px 12px" }} onClick={() => setQuantity((q) => Math.max(1, Number(q || 1) - 1))}>−</button>
+              <input type="number" min="1" max={maxQuantity || undefined} value={quantity} onChange={(e) => {
+                const next = Math.max(1, Number(e.target.value || 1));
+                setQuantity(maxQuantity ? Math.min(next, maxQuantity) : next);
+              }} style={{ width: 80, textAlign: "center" }} />
+              <button type="button" className="secondary-btn" style={{ minWidth: 44, padding: "8px 12px" }} disabled={!!maxQuantity && Number(quantity) >= Number(maxQuantity)} onClick={() => setQuantity((q) => maxQuantity ? Math.min(Number(maxQuantity), Number(q || 1) + 1) : Number(q || 1) + 1)}>+</button>
+            </div>
+          </div>
+        )}
         <div className="option-total"><span>Final Unit Price</span><strong>{money(finalPrice)}</strong></div>
         <div className="modal-actions"><button className="secondary-btn" onClick={onCancel}>Cancel</button><button className="primary-btn" disabled={!!validation} onClick={() => onConfirm(finalPrice)}>{actionLabel}</button></div>
       </div>
@@ -496,6 +509,7 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, rel
   const [customerTelephone, setCustomerTelephone] = useState("");
   const [selectionProduct, setSelectionProduct] = useState(null);
   const [selections, setSelections] = useState({});
+  const [selectionQuantity, setSelectionQuantity] = useState(1);
 
   const saleProducts = products.filter((p) => p.skuType !== "inventory");
   const categories = ["All", ...new Set(saleProducts.map((p) => p.category))];
@@ -509,12 +523,13 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, rel
     if (product.stock <= 0) return;
     if (!(product.optionGroups || []).length) return addConfigured(product, {}, Number(product.price));
     setSelectionProduct(product);
+    setSelectionQuantity(1);
     const defaults = {};
     (product.optionGroups || []).forEach((group) => { if (!group.required && group.options?.length === 0) defaults[group.id] = ""; });
     setSelections(defaults);
   }
 
-  function addConfigured(product, selected, finalPrice) {
+  function addConfigured(product, selected, finalPrice, quantity = 1) {
     const selectedOptions = (product.optionGroups || []).flatMap((group) => {
       const option = group.options?.find((item) => item.id === selected[group.id]);
       return option ? [{ groupId: group.id, groupName: group.name, optionId: option.id, optionName: option.name, priceAdjustment: Number(option.priceAdjustment || 0) }] : [];
@@ -522,11 +537,12 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, rel
     const signature = JSON.stringify(selected);
     setCart((current) => {
       const found = current.find((x) => x.id === product.id && JSON.stringify(x.selections || {}) === signature);
+      const addQty = Math.max(1, Number(quantity || 1));
       if (found) {
         if (found.qty >= product.stock) return current;
-        return current.map((x) => x === found ? { ...x, qty: x.qty + 1 } : x);
+        return current.map((x) => x === found ? { ...x, qty: Math.min(x.qty + addQty, product.stock) } : x);
       }
-      return [...current, { ...product, id: `${product.id}-${signature}`, productId: product.id, basePrice: Number(product.price), price: finalPrice, selections: selected, selectedOptions, qty: 1 }];
+      return [...current, { ...product, id: `${product.id}-${signature}`, productId: product.id, basePrice: Number(product.price), price: finalPrice, selections: selected, selectedOptions, qty: Math.min(addQty, product.stock) }];
     });
     setSelectionProduct(null);
     setSelections({});
