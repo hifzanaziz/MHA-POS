@@ -1517,7 +1517,7 @@ if (variantValueError) throw variantValueError;
 const { data: productionEntryData, error: productionEntryError } =
   await supabase
     .from("production_entry")
-    .select("production_sku_id, production_quantity");
+    .select("production_sku_id, product_variant_id, production_quantity");
 
 if (productionEntryError) throw productionEntryError;
 
@@ -1594,11 +1594,16 @@ if (variantStockError) throw variantStockError;
       (row) => row.product_variant_id === variant.id
     );
 
+    const variantProduced = (productionEntryData || [])
+      .filter((entry) => entry.product_variant_id === variant.id)
+      .reduce((total, entry) => total + Number(entry.production_quantity || 0), 0);
+
     return {
       id: variant.id,
       code: variant.variant_code,
       name: variant.variant_name || "",
       price: Number(variant.selling_price || 0),
+      produced: variantProduced,
       stock: Number(stockRow?.current_stock || 0),
       minimumStock: Number(stockRow?.minimum_stock || 0),
       selections,
@@ -2055,8 +2060,16 @@ async function recordProduction(product, selected = {}) {
                 </div>
               </div>
               <div className="production-bars">
-                <div><span>Produced</span><strong>{p.produced}</strong></div>
-                <div><span>Remaining</span><strong>{p.stock}</strong></div>
+                {(p.variants || []).length ? (p.variants || []).map((variant) => (
+                  <div key={variant.id} style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: "12px", alignItems: "center" }}>
+                    <span><strong>{variant.name || variant.code}</strong></span>
+                    <span>Produced <strong>{variant.produced || 0}</strong></span>
+                    <span>Remaining <strong>{variant.stock || 0}</strong></span>
+                  </div>
+                )) : <>
+                  <div><span>Produced</span><strong>{p.produced}</strong></div>
+                  <div><span>Remaining</span><strong>{p.stock}</strong></div>
+                </>}
               </div>
               <RecipeStatusButton product={p} />
               {feedback[p.id] && <div className={feedback[p.id].ok ? "production-feedback ok" : "production-feedback error"}>{feedback[p.id].text}</div>}
@@ -2086,9 +2099,9 @@ async function recordProduction(product, selected = {}) {
               <span data-label="Product Name"><strong>{p.name}</strong></span>
               <span data-label="Category">{p.category}</span>
               <span data-label="Price"><strong>{money(p.price)}</strong></span>
-              <span data-label="Produced"><strong>{p.produced}</strong></span>
+              <span data-label="Produced">{(p.variants || []).map((v) => <small key={v.id} style={{ display: "block" }}><strong>{v.name}:</strong> {v.produced || 0}</small>)}</span>
               <span data-label="Sold"><strong>{p.sold}</strong></span>
-              <span data-label="Remaining"><strong>{p.stock}</strong></span>
+              <span data-label="Remaining">{(p.variants || []).map((v) => <small key={v.id} style={{ display: "block" }}><strong>{v.name}:</strong> {v.stock || 0}</small>)}</span>
               <span data-label="Recipe Status"><RecipeStatusButton product={p} /></span>
               <span data-label="Record Production" className="list-production-entry">
                 <input type="number" min="1" value={amounts[p.id] ?? ""} onChange={(e) => setAmounts((current) => ({ ...current, [p.id]: e.target.value }))} placeholder="Qty" />
