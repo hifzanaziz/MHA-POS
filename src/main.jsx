@@ -31,6 +31,7 @@ import {
   Store,
   UtensilsCrossed,
   WalletCards,
+  Settings,
 } from "lucide-react";
 import {
   CartesianGrid,
@@ -207,6 +208,7 @@ const navItems = [
   { id: "inventory", label: "Inventory", icon: Boxes },
   { id: "recipe", label: "Recipe Management", icon: BookOpenText },
   { id: "production", label: "Production SKU", icon: UtensilsCrossed },
+  { id: "config", label: "Config", icon: Settings },
 ];
 
 function AppShell({ user, page, setPage, onLogout, children }) {
@@ -830,7 +832,7 @@ function OrderHistory({ orders, setOrders, products, setProducts, reloadOrders }
   );
 }
 
-function Inventory({ products, setProducts }) {
+function Inventory({ products, setProducts, configOptions = [] }) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState({ key: "sku", direction: "asc" });
   const [modal, setModal] = useState(null);
@@ -1273,13 +1275,13 @@ async function deleteSku(product) {
               <form onSubmit={saveSku} className="sku-form">
                 <label>SKU Code<input value={form.sku ?? ""} onChange={(e) => setForm({ ...form, sku: e.target.value })} /></label>
                 <label>SKU Name<input value={form.name ?? ""} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
-                <label>Category<input value={form.category ?? ""} onChange={(e) => setForm({ ...form, category: e.target.value })} /></label>
+                <label>Category<select value={form.category ?? ""} onChange={(e) => setForm({ ...form, category: e.target.value })}><option value="">Select category</option>{configOptions.filter((x) => x.option_type === "INVENTORY_CATEGORY").map((x) => <option key={x.id} value={x.option_value}>{x.option_value}</option>)}</select></label>
                 <label>Selling Price (RM)<input type="number" step="0.01" min="0" value={form.price ?? ""} onChange={(e) => setForm({ ...form, price: e.target.value })} /></label>
                 <label>Minimum Stock<input type="number" min="0" value={form.minimum ?? ""} onChange={(e) => setForm({ ...form, minimum: e.target.value })} /></label>
                 <label>Current Stock<input type="number" min="0" value={form.stock ?? 0} onChange={(e) => setForm({ ...form, stock: e.target.value })} /></label>
-                <label>Order UOM<input placeholder="e.g. Carton" value={form.orderUom ?? ""} onChange={(e) => setForm({ ...form, orderUom: e.target.value })} /></label>
-                <label>Inventory UOM<input placeholder="e.g. Piece" value={form.inventoryUom ?? ""} onChange={(e) => setForm({ ...form, inventoryUom: e.target.value })} /></label>
-                <label>Recipe UOM<input placeholder="e.g. Gram" value={form.recipeUom ?? ""} onChange={(e) => setForm({ ...form, recipeUom: e.target.value })} /></label>
+                <label>Order UOM<select value={form.orderUom ?? ""} onChange={(e) => setForm({ ...form, orderUom: e.target.value })}><option value="">Select UOM</option>{configOptions.filter((x) => x.option_type === "UOM").map((x) => <option key={x.id} value={x.option_value}>{x.option_value}</option>)}</select></label>
+                <label>Inventory UOM<select value={form.inventoryUom ?? ""} onChange={(e) => setForm({ ...form, inventoryUom: e.target.value })}><option value="">Select UOM</option>{configOptions.filter((x) => x.option_type === "UOM").map((x) => <option key={x.id} value={x.option_value}>{x.option_value}</option>)}</select></label>
+                <label>Recipe UOM<select value={form.recipeUom ?? ""} onChange={(e) => setForm({ ...form, recipeUom: e.target.value })}><option value="">Select UOM</option>{configOptions.filter((x) => x.option_type === "UOM").map((x) => <option key={x.id} value={x.option_value}>{x.option_value}</option>)}</select></label>
                 <label>Order → Inventory Qty<input type="number" min="0.0001" step="0.0001" placeholder="e.g. 5 packs per carton" value={form.orderToInventory ?? ""} onChange={(e) => setForm({ ...form, orderToInventory: e.target.value })} /></label>
                 <label>Inventory → Recipe Qty<input type="number" min="0.0001" step="0.0001" placeholder="e.g. 500 g per pack" value={form.inventoryToRecipe ?? ""} onChange={(e) => setForm({ ...form, inventoryToRecipe: e.target.value })} /></label>
                 <div className="conversion-preview"><span>Order → Recipe</span><strong>{Number(form.orderToInventory || 0) * Number(form.inventoryToRecipe || 0)} {form.recipeUom || "Recipe UOM"}</strong><small>1 {form.orderUom || "Order UOM"} = {form.orderToInventory || 0} {form.inventoryUom || "Inventory UOM"} × {form.inventoryToRecipe || 0} {form.recipeUom || "Recipe UOM"}</small></div>
@@ -1467,7 +1469,7 @@ function RecipeManagement({ products, recipes, setRecipes }) {
   );
 }
 
-function Production({ products, setProducts, recipes }) {
+function Production({ products, setProducts, recipes, configOptions = [] }) {
   const [amounts, setAmounts] = useState({});
   const [feedback, setFeedback] = useState({});
   const [viewMode, setViewMode] = useState("tiles");
@@ -2117,7 +2119,6 @@ async function recordProduction(product, selected = {}) {
             <button onClick={() => toggleSort("sku")}>SKU <SortIcon column="sku" /></button>
             <button onClick={() => toggleSort("name")}>Product Name <SortIcon column="name" /></button>
             <button onClick={() => toggleSort("category")}>Category <SortIcon column="category" /></button>
-            <button onClick={() => toggleSort("price")}>Price <SortIcon column="price" /></button>
             <button onClick={() => toggleSort("produced")}>Produced <SortIcon column="produced" /></button>
             <button onClick={() => toggleSort("sold")}>Sold <SortIcon column="sold" /></button>
             <button onClick={() => toggleSort("stock")}>Remaining <SortIcon column="stock" /></button>
@@ -2129,7 +2130,6 @@ async function recordProduction(product, selected = {}) {
               <span data-label="SKU"><strong>{p.sku}</strong></span>
               <span data-label="Product Name"><strong>{p.name}</strong></span>
               <span data-label="Category">{p.category}</span>
-              <span data-label="Price"><strong>{money(p.price)}</strong></span>
               <span data-label="Produced">{(p.variants || []).map((v) => <small key={v.id} style={{ display: "block" }}><strong>{v.name}:</strong> {v.produced || 0}</small>)}</span>
               <span data-label="Sold"><strong>{p.sold}</strong></span>
               <span data-label="Remaining">{(p.variants || []).map((v) => <small key={v.id} style={{ display: "block" }}><strong>{v.name}:</strong> {v.stock || 0}</small>)}</span>
@@ -2163,7 +2163,7 @@ async function recordProduction(product, selected = {}) {
               <form className="sku-form" onSubmit={saveProduct}>
                 <label>Product SKU Code<input autoFocus value={productForm.sku} onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })} placeholder="e.g. BUR-002" /></label>
                 <label>Product Name<input value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} placeholder="Product description" /></label>
-                <label>Category<input value={productForm.category} onChange={(e) => setProductForm({ ...productForm, category: e.target.value })} placeholder="e.g. Burger" /></label>
+                <label>Category<select value={productForm.category} onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}><option value="">Select category</option>{configOptions.filter((x) => x.option_type === "PRODUCT_CATEGORY").map((x) => <option key={x.id} value={x.option_value}>{x.option_value}</option>)}</select></label>
                 <label>Selling Price (RM)<input type="number" min="0" step="0.01" value={productForm.price} onChange={(e) => setProductForm({ ...productForm, price: e.target.value })} /></label><label className="inline-check"><input type="checkbox" checked={productForm.taxApplicable !== false} onChange={(e) => setProductForm({ ...productForm, taxApplicable: e.target.checked })} /> Apply 6% Tax</label>
                 <label>Minimum Product Stock<input type="number" min="0" step="1" value={productForm.minimum} onChange={(e) => setProductForm({ ...productForm, minimum: e.target.value })} /></label>
                 <div className="option-editor">
@@ -2299,12 +2299,71 @@ async function recordProduction(product, selected = {}) {
     </div>
   );
 }
+
+function Config({ options, reloadConfig }) {
+  const [values, setValues] = useState({ INVENTORY_CATEGORY: "", UOM: "", PRODUCT_CATEGORY: "" });
+  const [message, setMessage] = useState("");
+  const groups = [
+    ["INVENTORY_CATEGORY", "Inventory Category"],
+    ["UOM", "UOM"],
+    ["PRODUCT_CATEGORY", "Product SKU Category"],
+  ];
+
+  async function add(type) {
+    const value = values[type]?.trim();
+    if (!value) return;
+    const { error } = await supabase.rpc("add_config_option", { p_option_type: type, p_option_value: value });
+    if (error) return setMessage(error.message || "Failed to add config.");
+    setValues((current) => ({ ...current, [type]: "" }));
+    setMessage("");
+    await reloadConfig();
+  }
+
+  async function remove(id) {
+    if (!window.confirm("Remove this config value?")) return;
+    const { error } = await supabase.rpc("remove_config_option", { p_id: id });
+    if (error) return setMessage(error.message || "Failed to remove config.");
+    setMessage("");
+    await reloadConfig();
+  }
+
+  return (
+    <div className="dashboard-grid">
+      <section className="hero-panel">
+        <div><p className="eyebrow">MASTER CONFIGURATION</p><h1>Config</h1><p>Maintain reusable categories and UOM values used by Inventory and Production SKU.</p></div>
+      </section>
+      <section className="dashboard-alert-grid">
+        {groups.map(([type, title]) => (
+          <article className="table-card" key={type}>
+            <div className="section-head"><div><p className="eyebrow">MASTER LIST</p><h3>{title}</h3></div></div>
+            <div className="production-entry">
+              <input value={values[type]} onChange={(e) => setValues((current) => ({ ...current, [type]: e.target.value }))} placeholder={`Add ${title}`} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(type); } }} />
+              <button className="primary-btn" onClick={() => add(type)}><Plus size={16} /> Add</button>
+            </div>
+            <div className="alert-list">
+              {options.filter((x) => x.option_type === type).map((item) => (
+                <div className="alert-row" key={item.id}>
+                  <div className="grow"><strong>{item.option_value}</strong></div>
+                  <button className="icon-btn danger-icon" title="Remove" onClick={() => remove(item.id)}><Trash2 size={16} /></button>
+                </div>
+              ))}
+              {!options.some((x) => x.option_type === type) && <div className="dashboard-empty-alert">No values configured.</div>}
+            </div>
+          </article>
+        ))}
+      </section>
+      {message && <div className="form-error">{message}</div>}
+    </div>
+  );
+}
+
 function App() {
   const [user, setUser] = useState(null);
   const [page, setPage] = useState("dashboard");
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [inventoryUsage, setInventoryUsage] = useState([]);
+  const [configOptions, setConfigOptions] = useState([]);
   const [recipes, setRecipes] = useState({
     1: [
       { inventorySkuId: 101, qtyRecipeUom: 200 },
@@ -2420,6 +2479,12 @@ function App() {
     }
   }
 
+  async function loadConfig() {
+    const { data, error } = await supabase.rpc("get_config_options");
+    if (error) { console.error("Load config error:", error); return; }
+    setConfigOptions(data || []);
+  }
+
   async function loadOrders() {
     const { data, error } = await supabase.from("sales_order").select("*, sales_order_item(*, sales_order_item_option(*))").order("created_at", { ascending: false });
     if (error) { console.error("Load orders error:", error); return; }
@@ -2451,7 +2516,7 @@ function App() {
     })));
   }
 
-  useEffect(() => { if (user) { loadMasterData(); loadOrders(); loadInventoryUsage(); } }, [user]);
+  useEffect(() => { if (user) { loadMasterData(); loadOrders(); loadInventoryUsage(); loadConfig(); } }, [user]);
 
 
   if (!user) return <Login onLogin={setUser} />;
@@ -2461,9 +2526,10 @@ function App() {
       {page === "dashboard" && <Dashboard products={products} orders={orders} recipes={recipes} inventoryUsage={inventoryUsage} onNavigate={setPage} />}
       {page === "order" && <OrderTaking products={products} setProducts={setProducts} orders={orders} setOrders={setOrders} onNavigate={setPage} reloadOrders={loadOrders} />}
       {page === "orderHistory" && <OrderHistory orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} reloadOrders={loadOrders} />}
-      {page === "inventory" && <Inventory products={products} setProducts={setProducts} />}
+      {page === "inventory" && <Inventory products={products} setProducts={setProducts} configOptions={configOptions} />}
       {page === "recipe" && <RecipeManagement products={products} recipes={recipes} setRecipes={setRecipes} setProducts={setProducts} />}
-      {page === "production" && <Production products={products} setProducts={setProducts} recipes={recipes} />}
+      {page === "production" && <Production products={products} setProducts={setProducts} recipes={recipes} configOptions={configOptions} />}
+      {page === "config" && <Config options={configOptions} reloadConfig={loadConfig} />}
     </AppShell>
   );
 }
