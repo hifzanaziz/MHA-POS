@@ -621,7 +621,7 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, rel
         </div>
         <div className="bill"><div><span>Subtotal</span><strong>{money(subtotal)}</strong></div><div><span>Tax 6%</span><strong>{money(tax)}</strong></div><div className="total"><span>Total</span><strong>{money(total)}</strong></div><button className="primary-btn full" disabled={!cart.length} onClick={() => submitOrder("Completed")}>Pay {money(total)}</button><button className="secondary-btn full pay-later-btn" disabled={!cart.length} onClick={() => submitOrder("Pending")}><History size={17} /> Pay Later</button><button className="text-btn full" type="button" onClick={() => onNavigate("orderHistory")}>View Order History <ChevronRight size={16} /></button></div>
       </aside>
-      {selectionProduct && <OptionSelectionModal product={selectionProduct} selections={selections} setSelections={setSelections} onCancel={() => setSelectionProduct(null)} onConfirm={(price) => addConfigured(selectionProduct, selections, price)} />}
+      {selectionProduct && <OptionSelectionModal product={selectionProduct} selections={selections} setSelections={setSelections} quantity={selectionQuantity} setQuantity={setSelectionQuantity} maxQuantity={selectionProduct?.stock || null} onCancel={() => { setSelectionProduct(null); setSelectionQuantity(1); }} onConfirm={(price) => addConfigured(selectionProduct, selections, price, selectionQuantity)} />}
     </div>
   );
 }
