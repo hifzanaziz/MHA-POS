@@ -1221,7 +1221,7 @@ async function deleteSku(product) {
               <div className="table-row" key={p.id}>
                 <span data-label="SKU / Product"><strong>{p.name}</strong><small>{p.sku}</small></span>
                 <span data-label="Category">{p.category}</span>
-                <span data-label="Stock"><strong>{p.stock}</strong> <small>{p.inventoryUom}</small></span>
+                <span data-label="Stock"><strong>{Number(p.orderToInventory || 1) > 0 ? (Number(p.stock || 0) / Number(p.orderToInventory || 1)).toLocaleString(undefined, { maximumFractionDigits: 4 }) : 0}</strong> <small>{p.orderUom}</small></span>
                 <span data-label="Minimum">{p.minimum}</span>
                 <span data-label="Status"><em className={`status ${status === "Healthy" ? "healthy" : status === "Low stock" ? "low" : "out"}`}>{status}</em></span>
                 <span data-label="Action" className="row-actions">
