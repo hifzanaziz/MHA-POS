@@ -940,3 +940,22 @@ body {
 .config-card .alert-row .grow strong { white-space:normal; overflow-wrap:anywhere; }
 @media (max-width:1100px) { .config-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:700px) { .config-grid { grid-template-columns:1fr; } .config-card { padding:18px; } }
+
+
+/* Public customer ordering */
+.public-order-page { min-height:100vh; background:var(--page-bg,#f6f8fc); }
+.public-order-header { min-height:72px; padding:14px 28px; background:#fff; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; gap:16px; position:sticky; top:0; z-index:30; }
+.public-order-header > div { display:flex; flex-direction:column; }
+.public-order-header > div > strong { font-size:1.05rem; }
+.public-order-header > div > span { color:var(--muted); font-size:.78rem; }
+.public-pos { padding:24px; max-width:1600px; margin:0 auto; }
+.public-loading { min-height:60vh; display:grid; place-items:center; color:var(--muted); font-weight:700; }
+.public-confirmation { width:min(520px,calc(100% - 32px)); margin:70px auto; background:#fff; border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--glow); padding:36px; text-align:center; }
+.public-confirmation > svg { color:var(--accent); margin-bottom:14px; }
+.public-confirmation h1 { margin:4px 0 8px; }
+.public-order-number { background:var(--soft); border-radius:16px; padding:18px; margin:24px 0 18px; display:flex; flex-direction:column; gap:5px; }
+.public-order-number span { color:var(--muted); font-size:.78rem; }
+.public-order-number strong { font-size:1.2rem; overflow-wrap:anywhere; }
+.public-confirmation .bill { text-align:left; margin-bottom:20px; }
+.public-confirmation .primary-btn { margin-top:22px; }
+@media(max-width:800px){.public-order-header{padding:12px 16px}.public-pos{padding:14px}.public-pos.pos-layout{grid-template-columns:1fr}.public-pos .cart-panel{position:static}.public-confirmation{margin:30px auto;padding:24px}}
