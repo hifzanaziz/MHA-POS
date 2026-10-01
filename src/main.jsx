@@ -1308,83 +1308,141 @@ async function deleteSku(product) {
 }
 
 
-function RecipeManagement({ products, recipes, setRecipes, setProducts }) {
+function RecipeManagement({ products, recipes, setRecipes }) {
   const productSkus = products.filter((p) => p.skuType !== "inventory");
   const inventorySkus = products.filter((p) => p.skuType === "inventory");
-  const [selectedProductId, setSelectedProductId] = useState(productSkus[0]?.id ?? "");
+  const [selectedProductId, setSelectedProductId] = useState("");
   const [mode, setMode] = useState("base");
-  const [selectedGroupId, setSelectedGroupId] = useState("");
-  const [selectedOptionId, setSelectedOptionId] = useState("");
-  const [draft, setDraft] = useState(() => recipes[productSkus[0]?.id] || []);
-  const [changeDraft, setChangeDraft] = useState([]);
+  const [selectedVariantId, setSelectedVariantId] = useState("");
+  const [draft, setDraft] = useState([]);
+  const [variantDraft, setVariantDraft] = useState([]);
+  const [variantRecipes, setVariantRecipes] = useState({});
   const [message, setMessage] = useState("");
   const selectedProduct = productSkus.find((p) => p.id === Number(selectedProductId));
-  const optionGroups = selectedProduct?.optionGroups || [];
-  const recipeGroups = optionGroups.filter((group) => group.recipeImpact);
-  const selectedGroup = recipeGroups.find((group) => group.id === selectedGroupId);
-  const selectedOption = selectedGroup?.options?.find((option) => option.id === selectedOptionId);
+  const selectedVariant = (selectedProduct?.variants || []).find((v) => v.id === Number(selectedVariantId));
+
+  async function loadRecipes(productId, preferredVariantId = "") {
+    if (!productId) return;
+    setMessage("");
+    const product = productSkus.find((p) => p.id === Number(productId));
+    const variantIds = (product?.variants || []).map((v) => v.id);
+    const [{ data: baseData, error: baseError }, { data: variantData, error: variantError }] = await Promise.all([
+      supabase.from("product_recipe").select("inventory_sku_id, quantity").eq("production_sku_id", Number(productId)).order("id"),
+      variantIds.length
+        ? supabase.from("variant_recipe").select("product_variant_id, inventory_sku_id, quantity").in("product_variant_id", variantIds).order("id")
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (baseError || variantError) {
+      console.error("Load recipe error:", baseError || variantError);
+      setMessage((baseError || variantError)?.message || "Failed to load recipe.");
+      return;
+    }
+    const baseLines = (baseData || []).map((line) => ({ inventorySkuId: line.inventory_sku_id, qtyRecipeUom: Number(line.quantity) }));
+    setDraft(baseLines);
+    setRecipes((current) => ({ ...current, [Number(productId)]: baseLines }));
+    const byVariant = {};
+    (variantData || []).forEach((line) => {
+      (byVariant[line.product_variant_id] ||= []).push({ inventorySkuId: line.inventory_sku_id, qtyRecipeUom: Number(line.quantity) });
+    });
+    setVariantRecipes(byVariant);
+    const nextVariantId = Number(preferredVariantId) || variantIds[0] || "";
+    setSelectedVariantId(nextVariantId);
+    setVariantDraft((byVariant[nextVariantId] || []).map((x) => ({ ...x })));
+  }
+
+  useEffect(() => {
+    if (!productSkus.length) return;
+    const validId = productSkus.some((p) => p.id === Number(selectedProductId)) ? Number(selectedProductId) : productSkus[0].id;
+    if (Number(selectedProductId) !== validId) setSelectedProductId(validId);
+    loadRecipes(validId);
+  }, [products]);
 
   function chooseProduct(value) {
     const id = Number(value);
-    setSelectedProductId(id); setDraft((recipes[id] || []).map((x) => ({ ...x }))); setMode("base"); setSelectedGroupId(""); setSelectedOptionId(""); setMessage("");
+    setSelectedProductId(id);
+    setMode("base");
+    loadRecipes(id);
   }
-
-  function addIngredient() {
-    const firstUnused = inventorySkus.find((inv) => !draft.some((line) => Number(line.inventorySkuId) === inv.id));
-    if (!firstUnused) return;
-    setDraft((current) => [...current, { inventorySkuId: firstUnused.id, qtyRecipeUom: 1 }]);
-  }
-  function updateLine(index, changes) { setDraft((current) => current.map((line, i) => i === index ? { ...line, ...changes } : line)); }
-  function removeLine(index) { setDraft((current) => current.filter((_, i) => i !== index)); }
-  function saveBaseRecipe() {
-    if (!selectedProduct) return;
-    if (!draft.length) { setMessage("Add at least one inventory SKU to the base recipe."); return; }
-    const invalid = draft.some((line) => !line.inventorySkuId || !Number.isFinite(Number(line.qtyRecipeUom)) || Number(line.qtyRecipeUom) <= 0);
-    const duplicate = new Set(draft.map((line) => Number(line.inventorySkuId))).size !== draft.length;
-    if (invalid) { setMessage("Every ingredient needs a valid Recipe UOM quantity greater than 0."); return; }
-    if (duplicate) { setMessage("The same inventory SKU cannot be added twice."); return; }
-    setRecipes((current) => ({ ...current, [selectedProduct.id]: draft.map((line) => ({ ...line, qtyRecipeUom: Number(line.qtyRecipeUom) })) }));
-    setMessage("Base recipe saved successfully.");
-  }
-  function chooseVariation(groupId, optionId) {
-    setSelectedGroupId(groupId); setSelectedOptionId(optionId);
-    const option = recipeGroups.find((g) => g.id === groupId)?.options?.find((o) => o.id === optionId);
-    setChangeDraft((option?.recipeChanges || []).map((x) => ({ ...x })));
+  function chooseVariant(value) {
+    const id = Number(value);
+    setSelectedVariantId(id);
+    setVariantDraft((variantRecipes[id] || []).map((x) => ({ ...x })));
     setMessage("");
   }
-  function addRecipeChange() {
-    const first = inventorySkus[0];
-    if (!first) return;
-    setChangeDraft((current) => [...current, { inventorySkuId: first.id, qtyRecipeUom: 1, mode: "add", replacesInventorySkuId: "" }]);
+  function addLine(setter, lines) {
+    const firstUnused = inventorySkus.find((inv) => !lines.some((line) => Number(line.inventorySkuId) === inv.id));
+    if (firstUnused) setter((current) => [...current, { inventorySkuId: firstUnused.id, qtyRecipeUom: 1 }]);
   }
-  function updateChange(index, changes) { setChangeDraft((current) => current.map((line, i) => i === index ? { ...line, ...changes } : line)); }
-  function removeChange(index) { setChangeDraft((current) => current.filter((_, i) => i !== index)); }
-  function saveVariationRecipe() {
-    if (!selectedProduct || !selectedGroup || !selectedOption) return;
-    const invalid = changeDraft.some((line) => !line.inventorySkuId || !Number.isFinite(Number(line.qtyRecipeUom)) || Number(line.qtyRecipeUom) <= 0 || (line.mode === "replace" && !line.replacesInventorySkuId));
-    if (invalid) { setMessage("Every variation ingredient needs a valid quantity; replacements also need a base ingredient."); return; }
-    const updatedGroups = optionGroups.map((group) => group.id !== selectedGroup.id ? group : ({ ...group, options: group.options.map((option) => option.id !== selectedOption.id ? option : ({ ...option, recipeChanges: changeDraft.map((line) => ({ ...line, inventorySkuId: Number(line.inventorySkuId), qtyRecipeUom: Number(line.qtyRecipeUom), replacesInventorySkuId: line.replacesInventorySkuId ? Number(line.replacesInventorySkuId) : "" })) })) }));
-    setProducts((current) => current.map((product) => product.id === selectedProduct.id ? { ...product, optionGroups: updatedGroups } : product));
-    setMessage("Variation recipe saved successfully.");
+  function updateLine(setter, index, changes) { setter((current) => current.map((line, i) => i === index ? { ...line, ...changes } : line)); }
+  function removeLine(setter, index) { setter((current) => current.filter((_, i) => i !== index)); }
+  function validateLines(lines, allowEmpty = false) {
+    if (!allowEmpty && !lines.length) return "Add at least one inventory SKU to the recipe.";
+    if (lines.some((line) => !line.inventorySkuId || !Number.isFinite(Number(line.qtyRecipeUom)) || Number(line.qtyRecipeUom) <= 0)) return "Every ingredient needs a quantity greater than 0.";
+    if (new Set(lines.map((line) => Number(line.inventorySkuId))).size !== lines.length) return "The same inventory SKU cannot be added twice.";
+    return "";
+  }
+  async function saveBaseRecipe() {
+    if (!selectedProduct) return;
+    const validation = validateLines(draft);
+    if (validation) return setMessage(validation);
+    const { error } = await supabase.rpc("save_base_recipe", {
+      p_production_sku_id: selectedProduct.id,
+      p_lines: draft.map((line) => ({ inventory_sku_id: Number(line.inventorySkuId), quantity: Number(line.qtyRecipeUom) })),
+    });
+    if (error) return setMessage(error.message || "Failed to save base recipe.");
+    const clean = draft.map((line) => ({ ...line, qtyRecipeUom: Number(line.qtyRecipeUom) }));
+    setRecipes((current) => ({ ...current, [selectedProduct.id]: clean }));
+    setDraft(clean);
+    setMessage("Base recipe saved successfully.");
+  }
+  async function saveVariantRecipe() {
+    if (!selectedVariant) return;
+    const validation = validateLines(variantDraft, true);
+    if (validation) return setMessage(validation);
+    const { error } = await supabase.rpc("save_variant_recipe", {
+      p_product_variant_id: selectedVariant.id,
+      p_lines: variantDraft.map((line) => ({ inventory_sku_id: Number(line.inventorySkuId), quantity: Number(line.qtyRecipeUom) })),
+    });
+    if (error) return setMessage(error.message || "Failed to save variant recipe.");
+    const clean = variantDraft.map((line) => ({ ...line, qtyRecipeUom: Number(line.qtyRecipeUom) }));
+    setVariantRecipes((current) => ({ ...current, [selectedVariant.id]: clean }));
+    setVariantDraft(clean);
+    setMessage(clean.length ? "Variant recipe saved successfully." : "Variant recipe cleared. This variant now uses the Base Recipe.");
   }
 
+  function RecipeLines({ lines, setter }) {
+    return <div className="recipe-lines">
+      {!lines.length && <div className="empty-recipe"><BookOpenText size={30} /><strong>No recipe configured</strong><span>Add an Inventory SKU to start.</span></div>}
+      {lines.map((line, index) => {
+        const inventory = inventorySkus.find((p) => p.id === Number(line.inventorySkuId));
+        return <div className="recipe-line" key={`${line.inventorySkuId}-${index}`}>
+          <label>Inventory SKU<select value={line.inventorySkuId} onChange={(e) => updateLine(setter, index, { inventorySkuId: Number(e.target.value) })}>{inventorySkus.map((p) => <option key={p.id} value={p.id}>{p.sku} — {p.name}</option>)}</select></label>
+          <label>Recipe Quantity<input type="number" min="0.0001" step="0.0001" value={line.qtyRecipeUom} onChange={(e) => updateLine(setter, index, { qtyRecipeUom: e.target.value })} /></label>
+          <div className="recipe-uom-display"><span>Recipe UOM</span><strong>{inventory?.recipeUom || "-"}</strong><small>1 {inventory?.inventoryUom || "Inventory UOM"} = {inventory?.inventoryToRecipe || 0} {inventory?.recipeUom || "Recipe UOM"}</small></div>
+          <button className="danger-icon recipe-remove" onClick={() => removeLine(setter, index)}><Trash2 size={17} /></button>
+        </div>;
+      })}
+    </div>;
+  }
+
+  if (!productSkus.length) return <div className="empty-recipe">No Product SKU available.</div>;
   return (
     <div className="recipe-page">
-      <section className="recipe-header-card"><div><p className="eyebrow">RECIPE MANAGEMENT</p><h3>Product recipe setup</h3><p className="muted">Configure a base recipe, then optionally add ingredient changes for recipe-impacting Size / Variant / Flavour selections.</p></div><label className="product-select">Product SKU<select value={selectedProductId} onChange={(e) => chooseProduct(e.target.value)}>{productSkus.map((p) => <option value={p.id} key={p.id}>{p.sku} — {p.name}</option>)}</select></label></section>
+      <section className="recipe-header-card"><div><p className="eyebrow">RECIPE MANAGEMENT</p><h3>Product recipe setup</h3><p className="muted">Base Recipe is the fallback. An exact Variant Recipe completely replaces the Base Recipe for that variant.</p></div><label className="product-select">Product SKU<select value={selectedProductId} onChange={(e) => chooseProduct(e.target.value)}>{productSkus.map((p) => <option value={p.id} key={p.id}>{p.sku} — {p.name}</option>)}</select></label></section>
       <section className="recipe-card">
-        <div className="recipe-tabs"><button className={mode === "base" ? "selected" : ""} onClick={() => setMode("base")}>Base Recipe</button><button className={mode === "variation" ? "selected" : ""} disabled={!recipeGroups.length} onClick={() => setMode("variation")}>Variation Recipes {recipeGroups.length ? `(${recipeGroups.length})` : ""}</button></div>
+        <div className="recipe-tabs"><button className={mode === "base" ? "selected" : ""} onClick={() => setMode("base")}>Base Recipe</button><button className={mode === "variation" ? "selected" : ""} disabled={!(selectedProduct?.variants || []).length} onClick={() => { setMode("variation"); const id = selectedVariantId || selectedProduct?.variants?.[0]?.id || ""; chooseVariant(id); }}>Variant Recipes</button></div>
         {mode === "base" ? <>
-          <div className="section-head"><div><p className="eyebrow">{selectedProduct?.sku || "PRODUCT"}</p><h3>{selectedProduct?.name || "Select a Product SKU"}</h3></div><button className="secondary-btn" onClick={addIngredient} disabled={!inventorySkus.length}><Plus size={17} /> Add Ingredient</button></div>
-          <div className="recipe-lines">{draft.length === 0 && <div className="empty-recipe"><BookOpenText size={30} /><strong>No base recipe configured</strong><span>Add an Inventory SKU to start.</span></div>}{draft.map((line, index) => { const inventory = inventorySkus.find((p) => p.id === Number(line.inventorySkuId)); return <div className="recipe-line" key={`${line.inventorySkuId}-${index}`}><label>Inventory SKU<select value={line.inventorySkuId} onChange={(e) => updateLine(index, { inventorySkuId: Number(e.target.value) })}>{inventorySkus.map((p) => <option key={p.id} value={p.id}>{p.sku} — {p.name}</option>)}</select></label><label>Recipe Quantity<input type="number" min="0.0001" step="0.0001" value={line.qtyRecipeUom} onChange={(e) => updateLine(index, { qtyRecipeUom: e.target.value })} /></label><div className="recipe-uom-display"><span>Recipe UOM</span><strong>{inventory?.recipeUom || "-"}</strong><small>1 {inventory?.inventoryUom || "Inventory UOM"} = {inventory?.inventoryToRecipe || 0} {inventory?.recipeUom || "Recipe UOM"}</small></div><button className="danger-icon recipe-remove" onClick={() => removeLine(index)}><Trash2 size={17} /></button></div>; })}</div>
+          <div className="section-head"><div><p className="eyebrow">{selectedProduct?.sku}</p><h3>{selectedProduct?.name}</h3></div><button className="secondary-btn" onClick={() => addLine(setDraft, draft)}><Plus size={17} /> Add Ingredient</button></div>
+          <RecipeLines lines={draft} setter={setDraft} />
           <div className="recipe-footer"><span>{draft.length} base ingredient{draft.length === 1 ? "" : "s"}</span><button className="primary-btn" onClick={saveBaseRecipe}>Save Base Recipe</button></div>
         </> : <>
-          <div className="variation-recipe-picker"><label>Recipe-impacting group<select value={selectedGroupId} onChange={(e) => { const group = recipeGroups.find((g) => g.id === e.target.value); setSelectedGroupId(e.target.value); setSelectedOptionId(group?.options?.[0]?.id || ""); setChangeDraft((group?.options?.[0]?.recipeChanges || []).map((x) => ({ ...x }))); }}>{recipeGroups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label><label>Option<select value={selectedOptionId} onChange={(e) => chooseVariation(selectedGroupId, e.target.value)}>{selectedGroup?.options?.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label></div>
-          <div className="variation-recipe-banner"><strong>{selectedOption?.name || "Select an option"}</strong><span>Changes are applied on top of the Base Recipe.</span></div>
-          <div className="section-head"><div><p className="eyebrow">VARIATION INGREDIENT CHANGES</p><h3>{selectedGroup?.name || "Option Group"} → {selectedOption?.name || "Option"}</h3></div><button className="secondary-btn" onClick={addRecipeChange} disabled={!inventorySkus.length}><Plus size={17} /> Add Change</button></div>
-          <div className="recipe-lines">{!changeDraft.length && <div className="empty-recipe"><BookOpenText size={30} /><strong>No variation changes</strong><span>This option will use the base recipe exactly.</span></div>}{changeDraft.map((line, index) => <div className="recipe-line variation-line" key={`${line.inventorySkuId}-${index}`}><label>Ingredient<select value={line.inventorySkuId} onChange={(e) => updateChange(index, { inventorySkuId: Number(e.target.value) })}>{inventorySkus.map((p) => <option key={p.id} value={p.id}>{p.sku} — {p.name}</option>)}</select></label><label>Action<select value={line.mode} onChange={(e) => updateChange(index, { mode: e.target.value, replacesInventorySkuId: e.target.value === "add" ? "" : line.replacesInventorySkuId })}><option value="add">Add</option><option value="replace">Replace</option></select></label>{line.mode === "replace" ? <label>Replace Base Ingredient<select value={line.replacesInventorySkuId} onChange={(e) => updateChange(index, { replacesInventorySkuId: Number(e.target.value) })}><option value="">Select ingredient</option>{draft.map((baseLine) => { const inv = inventorySkus.find((p) => p.id === Number(baseLine.inventorySkuId)); return <option key={baseLine.inventorySkuId} value={baseLine.inventorySkuId}>{inv?.name || baseLine.inventorySkuId}</option>; })}</select></label> : <span className="recipe-spacer" />}{<label>Qty<input type="number" min="0.0001" step="0.0001" value={line.qtyRecipeUom} onChange={(e) => updateChange(index, { qtyRecipeUom: e.target.value })} /></label>}<button className="danger-icon recipe-remove" onClick={() => removeChange(index)}><Trash2 size={17} /></button></div>)}</div>
-          <div className="recipe-footer"><span>{changeDraft.length} variation change{changeDraft.length === 1 ? "" : "s"}</span><button className="primary-btn" onClick={saveVariationRecipe}>Save Variation Recipe</button></div>
+          <div className="variation-recipe-picker"><label>Exact Product Variant<select value={selectedVariantId} onChange={(e) => chooseVariant(e.target.value)}>{(selectedProduct?.variants || []).map((variant) => <option key={variant.id} value={variant.id}>{variant.code} — {variant.name || "Variant"}</option>)}</select></label></div>
+          <div className="variation-recipe-banner"><strong>{selectedVariant?.name || "Select a variant"}</strong><span>{variantDraft.length ? "Variant Recipe active — this complete recipe overrides the Base Recipe." : "Uses Base Recipe — no Variant Recipe is configured."}</span></div>
+          <div className="section-head"><div><p className="eyebrow">VARIANT RECIPE</p><h3>{selectedVariant?.code || "Exact Variant"}</h3></div><button className="secondary-btn" onClick={() => addLine(setVariantDraft, variantDraft)} disabled={!selectedVariant}><Plus size={17} /> Add Ingredient</button></div>
+          <RecipeLines lines={variantDraft} setter={setVariantDraft} />
+          <div className="recipe-footer"><span>{variantDraft.length ? `${variantDraft.length} variant ingredient${variantDraft.length === 1 ? "" : "s"}` : "Fallback to Base Recipe"}</span><button className="primary-btn" disabled={!selectedVariant} onClick={saveVariantRecipe}>{variantDraft.length ? "Save Variant Recipe" : "Use Base Recipe"}</button></div>
         </>}
-        {message && <div className={message.includes("successfully") ? "success-message" : "form-error"}>{message}</div>}
+        {message && <div className={message.includes("successfully") || message.includes("cleared") ? "success-message" : "form-error"}>{message}</div>}
       </section>
     </div>
   );
