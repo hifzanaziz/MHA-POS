@@ -283,10 +283,27 @@ function StatCard({ label, value, sub, icon: Icon, danger }) {
 
 function Dashboard({ products, orders, recipes, onNavigate }) {
   const [trendRange, setTrendRange] = useState("7d");
-  const productSkus = products.filter((p) => p.skuType !== "inventory");
-  const sold = productSkus.reduce((a, p) => a + Number(p.sold || 0), 0);
+  const completedOrders = orders.filter((order) => order.paymentStatus === "Completed");
+  const sold = completedOrders.reduce(
+    (total, order) => total + (order.items || []).reduce((sum, item) => sum + Number(item.qty || 0), 0),
+    0
+  );
   const netSales = getNetSalesSummary(orders);
-  const topProducts = getTopProductSales(products).map((item) => ({ ...item, label: item.name }));
+  const salesByProduct = new Map();
+  completedOrders.forEach((order) => {
+    (order.items || []).forEach((item) => {
+      const key = item.productId ?? item.sku;
+      const current = salesByProduct.get(key) || { id: key, name: item.name, sold: 0 };
+      current.sold += Number(item.qty || 0);
+      salesByProduct.set(key, current);
+    });
+  });
+  const topProducts = [...salesByProduct.values()]
+    .sort((a, b) => b.sold - a.sold || String(a.name).localeCompare(String(b.name)))
+    .slice(0, 5)
+    .map((item) => ({ ...item, label: item.name }));
+  const inventoryUsage = new Map();
+  products.filter((p) => p.skuType === "inventory").forEach((item) => inventoryUsage.set(item.id, { id: item.id, name: item.name, usage: 0, uom: item.recipeUom || "" }));
   const topInventory = getTopInventoryUsage(products, recipes).map((item) => ({ ...item, label: `${item.name} (${item.uom})` }));
   const sellingTrend = getSellingTrend(orders, trendRange);
   const alerts = getStockAlerts(products);
