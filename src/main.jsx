@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+import { supabase } from './supabase'
+import React, { useEffect, useMemo, useState } from "react";
 import ReactDOM from "react-dom/client";
 import {
   AlertTriangle,
@@ -85,17 +86,36 @@ function money(value) {
 }
 
 function Login({ onLogin }) {
-  const [username, setUsername] = useState("manager");
-  const [password, setPassword] = useState("1234");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  function submit(e) {
+  async function submit(e) {
     e.preventDefault();
-    if (!username.trim() || !password.trim()) {
-      setError("Please enter username and password.");
+
+    if (!email.trim() || !password.trim()) {
+      setError("Please enter email and password.");
       return;
     }
-    onLogin(username);
+
+    setLoading(true);
+    setError("");
+
+    const { data, error: loginError } =
+      await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+
+    setLoading(false);
+
+    if (loginError) {
+      setError(loginError.message);
+      return;
+    }
+
+    onLogin(data.user.email);
   }
 
   return (
@@ -105,17 +125,28 @@ function Login({ onLogin }) {
           <Store size={24} />
           <span>MHA Web POS</span>
         </div>
+
         <div>
           <p className="eyebrow">RETAIL OPERATIONS</p>
           <h1>One workspace for sales, stock and production.</h1>
           <p className="lead">
-            Responsive web POS prototype designed for cashier, inventory and production workflows.
+            Responsive web POS for cashier, inventory and production workflows.
           </p>
         </div>
+
         <div className="login-stats">
-          <div><strong>4</strong><span>Operation modes</span></div>
-          <div><strong>24/7</strong><span>Store visibility</span></div>
-          <div><strong>Live</strong><span>Inventory status</span></div>
+          <div>
+            <strong>4</strong>
+            <span>Operation modes</span>
+          </div>
+          <div>
+            <strong>24/7</strong>
+            <span>Store visibility</span>
+          </div>
+          <div>
+            <strong>Live</strong>
+            <span>Inventory status</span>
+          </div>
         </div>
       </div>
 
@@ -124,29 +155,46 @@ function Login({ onLogin }) {
           <Store size={22} />
           <span>MHA Web POS</span>
         </div>
+
         <p className="eyebrow">WELCOME BACK</p>
         <h2>Sign in to your store</h2>
-        <p className="muted">Demo credentials are prefilled. Any non-empty credentials can enter.</p>
+
+        <p className="muted">
+          Sign in using your MHA POS account.
+        </p>
 
         <label>
-          Username
-          <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Enter username" />
+          Email
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Enter email"
+            autoComplete="email"
+          />
         </label>
 
         <label>
           Password
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter password" />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Enter password"
+            autoComplete="current-password"
+          />
         </label>
 
         {error && <div className="form-error">{error}</div>}
-        <button className="primary-btn full" type="submit">
-          Login <ChevronRight size={18} />
-        </button>
 
-        <div className="demo-note">
-          <span>Demo</span>
-          <code>manager / 1234</code>
-        </div>
+        <button
+          className="primary-btn full"
+          type="submit"
+          disabled={loading}
+        >
+          {loading ? "Signing in..." : "Login"}
+          {!loading && <ChevronRight size={18} />}
+        </button>
       </form>
     </div>
   );
@@ -725,6 +773,72 @@ function Inventory({ products, setProducts }) {
   const [form, setForm] = useState({});
   const [purchase, setPurchase] = useState({ quantity: "", uom: "order", supplier: "", reference: "", date: new Date().toISOString().slice(0, 10) });
 
+const [loadingInventory, setLoadingInventory] = useState(true);
+
+useEffect(() => {
+  async function loadInventory() {
+    setLoadingInventory(true);
+
+    const { data, error } = await supabase
+      .from("inventory_sku")
+      .select("*")
+      .eq("is_active", true)
+      .order("sku_code", { ascending: true });
+
+    if (error) {
+      console.error("Failed to load inventory:", error);
+      setLoadingInventory(false);
+      return;
+    }
+
+    const supabaseInventory = data.map((item) => ({
+      id: item.id,
+      skuType: "inventory",
+      sku: item.sku_code,
+      name: item.sku_name,
+      category: item.category || "",
+      price: Number(item.price || 0),
+
+      // DB stores stock in Recipe UOM.
+      // Existing UI displays stock in Inventory UOM.
+      stock:
+        Number(item.inventory_to_recipe || 1) > 0
+          ? Number(item.current_stock || 0) /
+            Number(item.inventory_to_recipe || 1)
+          : 0,
+
+     minimum:
+  Number(item.inventory_to_recipe || 1) > 0
+    ? Number(
+        item.minimum_stock ??
+        item.low_stock_level ??
+        0
+      ) / Number(item.inventory_to_recipe || 1)
+    : 0,
+
+      orderUom: item.order_uom || "",
+      inventoryUom: item.inventory_uom || "",
+      recipeUom: item.recipe_uom || "",
+
+      orderToInventory: Number(item.order_to_inventory || 1),
+      inventoryToRecipe: Number(item.inventory_to_recipe || 1),
+
+      produced: 0,
+      sold: 0,
+      purchaseHistory: [],
+    }));
+
+    setProducts((current) => [
+      ...current.filter((p) => p.skuType !== "inventory"),
+      ...supabaseInventory,
+    ]);
+
+    setLoadingInventory(false);
+  }
+
+  loadInventory();
+}, [setProducts]);
+
   const inventoryProducts = products.filter((p) => p.skuType === "inventory");
   const shown = sortProducts(
     inventoryProducts.filter((p) => `${p.name} ${p.sku} ${p.category}`.toLowerCase().includes(query.toLowerCase())),
@@ -754,21 +868,175 @@ function Inventory({ products, setProducts }) {
     setForm({ ...product });
     setModal("form");
   }
+async function saveSku(e) {
+  e.preventDefault();
 
-  function saveSku(e) {
-    e.preventDefault();
-    const validation = validateSku(form, products);
-    if (validation.length) { setErrors(validation); return; }
-    const normalized = { ...form, skuType: "inventory", sku: form.sku.trim(), name: form.name.trim(), category: form.category.trim(), price: Number(form.price || 0), minimum: Number(form.minimum), stock: Number(form.stock || 0), orderToInventory: Number(form.orderToInventory), inventoryToRecipe: Number(form.inventoryToRecipe) };
-    if (form.id) setProducts((current) => current.map((p) => p.id === form.id ? normalized : p));
-    else setProducts((current) => [...current, { ...normalized, id: Date.now() }]);
+  const validation = validateSku(form, products);
+
+  if (validation.length) {
+    setErrors(validation);
+    return;
+  }
+
+  setErrors([]);
+
+  const payload = {
+    sku_code: form.sku.trim(),
+    sku_name: form.name.trim(),
+    category: form.category.trim(),
+    price: Number(form.price || 0),
+
+    // Store minimum stock in Recipe UOM
+    minimum_stock:
+      Number(form.minimum || 0) *
+      Number(form.inventoryToRecipe || 1),
+
+    order_uom: form.orderUom.trim(),
+    inventory_uom: form.inventoryUom.trim(),
+    recipe_uom: form.recipeUom.trim(),
+
+    order_to_inventory: Number(form.orderToInventory),
+    inventory_to_recipe: Number(form.inventoryToRecipe),
+
+    is_active: true,
+  };
+
+  try {
+    if (form.id) {
+      // EDIT EXISTING SKU
+      const { error } = await supabase
+        .from("inventory_sku")
+        .update(payload)
+        .eq("id", form.id);
+
+      if (error) throw error;
+
+      setProducts((current) =>
+        current.map((p) =>
+          p.id === form.id
+            ? {
+                ...p,
+                sku: form.sku.trim(),
+                name: form.name.trim(),
+                category: form.category.trim(),
+                price: Number(form.price || 0),
+                minimum: Number(form.minimum || 0),
+                orderUom: form.orderUom.trim(),
+                inventoryUom: form.inventoryUom.trim(),
+                recipeUom: form.recipeUom.trim(),
+                orderToInventory: Number(form.orderToInventory),
+                inventoryToRecipe: Number(form.inventoryToRecipe),
+              }
+            : p
+        )
+      );
+    } else {
+      // ADD NEW SKU
+      const currentStockRecipeUom =
+        Number(form.stock || 0) *
+        Number(form.inventoryToRecipe || 1);
+
+      const { data, error } = await supabase
+        .from("inventory_sku")
+        .insert({
+          ...payload,
+          current_stock: currentStockRecipeUom,
+          low_stock_level:
+            Number(form.minimum || 0) *
+            Number(form.inventoryToRecipe || 1),
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const newProduct = {
+        id: data.id,
+        skuType: "inventory",
+        sku: data.sku_code,
+        name: data.sku_name,
+        category: data.category || "",
+        price: Number(data.price || 0),
+
+        stock:
+          Number(data.current_stock || 0) /
+          Number(data.inventory_to_recipe || 1),
+
+        minimum:
+          Number(data.minimum_stock || 0) /
+          Number(data.inventory_to_recipe || 1),
+
+        orderUom: data.order_uom || "",
+        inventoryUom: data.inventory_uom || "",
+        recipeUom: data.recipe_uom || "",
+
+        orderToInventory: Number(data.order_to_inventory || 1),
+        inventoryToRecipe: Number(data.inventory_to_recipe || 1),
+
+        produced: 0,
+        sold: 0,
+        purchaseHistory: [],
+      };
+
+      setProducts((current) => [...current, newProduct]);
+    }
+
     setModal(null);
+  } catch (error) {
+    console.error("Inventory save error:", error);
+    setErrors([error.message || "Failed to save Inventory SKU."]);
   }
+}
 
-  function viewSku(product) {
-    setSelected(product);
+async function viewSku(product) {
+  try {
+    const { data, error } = await supabase
+      .from("inventory_purchase")
+      .select("*")
+      .eq("inventory_sku_id", product.id)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    const purchaseHistory = (data || []).map((record) => ({
+      id: record.id,
+      reference: record.reference_no || "-",
+      supplier:
+        record.remarks?.replace("Supplier: ", "") || "-",
+
+      // Database stores the original quantity in Order UOM
+      quantity: Number(record.quantity_order_uom || 0),
+      uom: "order",
+
+      // Convert Recipe UOM quantity back to Inventory UOM
+      inventoryQuantity:
+        Number(record.quantity_recipe_uom || 0) /
+        Number(product.inventoryToRecipe || 1),
+
+      date: new Date(record.created_at)
+        .toISOString()
+        .slice(0, 10),
+
+      unitPrice: Number(record.unit_price || 0),
+      totalCost: Number(record.total_cost || 0),
+    }));
+
+    setSelected({
+      ...product,
+      purchaseHistory,
+    });
+
     setModal("detail");
+
+  } catch (error) {
+    console.error("Load purchase history error:", error);
+
+    alert(
+      error.message ||
+      "Failed to load purchase history."
+    );
   }
+}
 
   function openPurchase(product) {
     setSelected(product);
@@ -777,19 +1045,104 @@ function Inventory({ products, setProducts }) {
     setModal("purchase");
   }
 
-  function submitPurchase(e) {
-    e.preventDefault();
-    try {
-      setProducts((current) => current.map((p) => p.id === selected.id ? recordPurchase(p, purchase) : p));
-      setModal(null);
-    } catch (error) { setErrors([error.message]); }
-  }
+ async function submitPurchase(e) {
+  e.preventDefault();
 
-  function deleteSku(product) {
-    if (window.confirm(`Delete ${product.sku} - ${product.name}?`)) {
-      setProducts((current) => current.filter((p) => p.id !== product.id));
+  try {
+    const quantity = Number(purchase.quantity);
+
+    if (!quantity || quantity <= 0) {
+      throw new Error("Purchase quantity must be greater than zero.");
     }
+
+    // Database function expects quantity in Order UOM.
+    // If user enters Inventory UOM, convert it back to Order UOM.
+    const quantityOrderUom =
+      purchase.uom === "order"
+        ? quantity
+        : quantity / Number(selected.orderToInventory || 1);
+
+    const { error } = await supabase.rpc(
+      "add_inventory_stock",
+      {
+        p_inventory_sku_id: selected.id,
+        p_quantity_order_uom: quantityOrderUom,
+        p_unit_price: 0,
+        p_reference_no: purchase.reference || null,
+        p_remarks: purchase.supplier
+          ? `Supplier: ${purchase.supplier}`
+          : null,
+      }
+    );
+
+    if (error) throw error;
+
+    // Reload the latest stock from Supabase
+    const { data, error: loadError } = await supabase
+      .from("inventory_sku")
+      .select("*")
+      .eq("id", selected.id)
+      .single();
+
+    if (loadError) throw loadError;
+
+    const updatedStock =
+      Number(data.current_stock || 0) /
+      Number(data.inventory_to_recipe || 1);
+
+    setProducts((current) =>
+      current.map((p) =>
+        p.id === selected.id
+          ? {
+              ...p,
+              stock: updatedStock,
+            }
+          : p
+      )
+    );
+
+    setModal(null);
+    setErrors([]);
+
+  } catch (error) {
+    console.error("Add stock error:", error);
+    setErrors([
+      error.message || "Failed to add inventory stock."
+    ]);
   }
+}
+
+async function deleteSku(product) {
+  const confirmed = window.confirm(
+    `Deactivate ${product.sku} - ${product.name}?`
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const { error } = await supabase
+      .from("inventory_sku")
+      .update({
+        is_active: false,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", product.id);
+
+    if (error) throw error;
+
+    setProducts((current) =>
+      current.filter((p) => p.id !== product.id)
+    );
+
+  } catch (error) {
+    console.error("Deactivate inventory error:", error);
+
+    alert(
+      error.message ||
+      "Failed to deactivate Inventory SKU."
+    );
+  }
+}
 
   const header = (label, key) => (
     <button className="sort-header" onClick={() => toggleSort(key)}>{label}<SortIcon column={key} /></button>
@@ -1003,6 +1356,188 @@ function Production({ products, setProducts, recipes }) {
   const [productForm, setProductForm] = useState({ sku: "", name: "", category: "", price: "", minimum: 0, optionGroups: [] });
   const [productionSelectionProduct, setProductionSelectionProduct] = useState(null);
   const [productionSelections, setProductionSelections] = useState({});
+
+  const [loadingProduction, setLoadingProduction] = useState(true);
+
+useEffect(() => {
+async function loadProductionSkus() {
+  setLoadingProduction(true);
+
+  try {
+    // 1. Load Production SKUs
+    const { data: productData, error: productError } =
+      await supabase
+        .from("production_sku")
+        .select("*")
+        .eq("is_active", true)
+        .order("sku_code", { ascending: true });
+
+    if (productError) throw productError;
+
+    // 2. Load variation groups
+    const { data: typeData, error: typeError } =
+      await supabase
+        .from("variation_type")
+        .select("*")
+        .order("id", { ascending: true });
+
+    if (typeError) throw typeError;
+
+    // 3. Load variation options
+    const { data: valueData, error: valueError } =
+      await supabase
+        .from("variation_value")
+        .select("*")
+        .order("id", { ascending: true });
+
+    if (valueError) throw valueError;
+
+    // 4. Load actual product variants
+const { data: variantData, error: variantError } =
+  await supabase
+    .from("product_variant")
+    .select("*")
+    .eq("is_active", true)
+    .order("id", { ascending: true });
+
+if (variantError) throw variantError;
+
+// 5. Load which variation values belong to each variant
+const { data: variantValueData, error: variantValueError } =
+  await supabase
+    .from("product_variant_value")
+    .select("*");
+
+if (variantValueError) throw variantValueError;
+
+// 6. Load production history
+const { data: productionEntryData, error: productionEntryError } =
+  await supabase
+    .from("production_entry")
+    .select("production_sku_id, production_quantity");
+
+if (productionEntryError) throw productionEntryError;
+
+    // 4. Convert Supabase structure to the structure
+    // already expected by the MHA POS frontend.
+    const supabaseProducts = (productData || []).map((item) => {
+      const productTypes = (typeData || []).filter(
+        (type) => type.production_sku_id === item.id
+      );
+
+      const optionGroups = productTypes.map((type) => ({
+        id: `type-${type.id}`,
+        databaseId: type.id,
+
+        name: type.type_name,
+
+        required: false,
+        priceImpact: true,
+        recipeImpact: true,
+
+        options: (valueData || [])
+          .filter(
+            (value) =>
+              value.variation_type_id === type.id
+          )
+          .map((value) => ({
+            id: `value-${value.id}`,
+            databaseId: value.id,
+
+            name: value.value_name,
+
+            priceAdjustment: 0,
+            recipeChanges: [],
+          })),
+      }));
+
+      const variants = (variantData || [])
+  .filter(
+    (variant) =>
+      variant.production_sku_id === item.id
+  )
+  .map((variant) => {
+    const linkedValueIds = (variantValueData || [])
+      .filter(
+        (link) =>
+          link.product_variant_id === variant.id
+      )
+      .map((link) => link.variation_value_id);
+
+    const selections = {};
+
+    productTypes.forEach((type) => {
+      const selectedValue = (valueData || []).find(
+        (value) =>
+          value.variation_type_id === type.id &&
+          linkedValueIds.includes(value.id)
+      );
+
+      if (selectedValue) {
+        selections[`type-${type.id}`] =
+          `value-${selectedValue.id}`;
+      }
+    });
+
+    return {
+      id: variant.id,
+      code: variant.variant_code,
+      name: variant.variant_name || "",
+      price: Number(variant.selling_price || 0),
+      selections,
+    };
+  });
+
+      const totalProduced = (productionEntryData || [])
+        .filter(
+          (entry) => entry.production_sku_id === item.id
+        )
+        .reduce(
+          (total, entry) =>
+            total + Number(entry.production_quantity || 0),
+          0
+        );
+
+      return {
+        id: item.id,
+        skuType: "product",
+
+        sku: item.sku_code,
+        name: item.sku_name,
+        category: item.category || "",
+
+        price: Number(item.base_price || 0),
+
+        stock: 0,
+        minimum: 0,
+        produced: totalProduced,
+        sold: 0,
+
+        optionGroups,
+        variants,
+      };
+    });
+
+    setProducts((current) => [
+      ...current.filter(
+        (p) => p.skuType === "inventory"
+      ),
+      ...supabaseProducts,
+    ]);
+
+  } catch (error) {
+    console.error(
+      "Failed to load Production SKU:",
+      error
+    );
+  } finally {
+    setLoadingProduction(false);
+  }
+}
+
+  loadProductionSkus();
+}, [setProducts]);
+
   const productSkus = products.filter((p) => p.skuType !== "inventory");
   const visibleProductSkus = useMemo(() => filterAndSortProductSkus(products, recipes, query, sort), [products, recipes, query, sort]);
 
@@ -1017,19 +1552,139 @@ function Production({ products, setProducts, recipes }) {
     return sort.direction === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />;
   }
 
-  function recordProduction(product, selected = {}) {
-    const qty = Number(amounts[product.id] || 0);
-    if (!qty || qty < 1) return;
-    try {
-      const result = applyProductionWithRecipe(products, recipes, product.id, qty, product.optionGroups || [], selected);
-      setProducts(result.products);
-      const detail = result.usage.map((u) => `${u.inventoryName}: -${Number(u.qtyInventoryUom.toFixed(4))} ${u.inventoryUom}`).join(" • ");
-      const optionText = (product.optionGroups || []).flatMap((g) => { const o = g.options?.find((x) => x.id === selected[g.id]); return o ? [`${g.name}: ${o.name}`] : []; }).join(" • ");
-      setFeedback((current) => ({ ...current, [product.id]: { ok: true, text: `Produced ${qty}${optionText ? ` (${optionText})` : ""}. ${detail}` } }));
-      setAmounts((current) => ({ ...current, [product.id]: "" }));
-      setProductionSelectionProduct(null); setProductionSelections({});
-    } catch (error) { setFeedback((current) => ({ ...current, [product.id]: { ok: false, text: error.message } })); }
+async function recordProduction(product, selected = {}) {
+  const qty = Number(amounts[product.id] || 0);
+
+  if (!qty || qty < 1) return;
+
+  try {
+    // Find the exact database variant matching
+    // the user's Size / Flavour selections.
+    const selectedValueIds = Object.values(selected)
+      .filter(Boolean)
+      .sort();
+
+    const matchedVariant = (product.variants || []).find(
+      (variant) => {
+        const variantValueIds = Object.values(
+          variant.selections || {}
+        )
+          .filter(Boolean)
+          .sort();
+
+        return (
+          JSON.stringify(variantValueIds) ===
+          JSON.stringify(selectedValueIds)
+        );
+      }
+    );
+
+    if ((product.optionGroups || []).length && !matchedVariant) {
+      throw new Error(
+        "No Product Variant matches the selected options."
+      );
+    }
+
+    const referenceNo =
+      `PROD-${Date.now()}`;
+
+    const { error } = await supabase.rpc(
+      "process_production",
+      {
+        p_production_sku_id: product.id,
+        p_product_variant_id: matchedVariant?.id ?? null,
+        p_quantity: qty,
+        p_reference_no: referenceNo,
+      }
+    );
+
+    if (error) throw error;
+
+    // Reload Inventory because Supabase has deducted
+    // the ingredients from current_stock.
+    const { data: inventoryData, error: inventoryError } =
+      await supabase
+        .from("inventory_sku")
+        .select("*")
+        .eq("is_active", true);
+
+    if (inventoryError) throw inventoryError;
+
+    setProducts((current) =>
+      current.map((item) => {
+        if (item.skuType !== "inventory") {
+          if (item.id === product.id) {
+            return {
+              ...item,
+              produced: Number(item.produced || 0) + qty,
+              stock: Number(item.stock || 0) + qty,
+            };
+          }
+
+          return item;
+        }
+
+        const latest = inventoryData.find(
+          (inventory) => inventory.id === item.id
+        );
+
+        if (!latest) return item;
+
+        return {
+          ...item,
+
+          stock:
+            Number(latest.current_stock || 0) /
+            Number(latest.inventory_to_recipe || 1),
+        };
+      })
+    );
+
+    const optionText = (product.optionGroups || [])
+      .flatMap((group) => {
+        const option = group.options?.find(
+          (item) => item.id === selected[group.id]
+        );
+
+        return option
+          ? [`${group.name}: ${option.name}`]
+          : [];
+      })
+      .join(" • ");
+
+    setFeedback((current) => ({
+      ...current,
+      [product.id]: {
+        ok: true,
+        text:
+          `Produced ${qty}` +
+          `${optionText ? ` (${optionText})` : ""}` +
+          `${matchedVariant ? ` • ${matchedVariant.code}` : ""}`,
+      },
+    }));
+
+    setAmounts((current) => ({
+      ...current,
+      [product.id]: "",
+    }));
+
+    setProductionSelectionProduct(null);
+    setProductionSelections({});
+
+  } catch (error) {
+    console.error("Production error:", error);
+
+    setFeedback((current) => ({
+      ...current,
+      [product.id]: {
+        ok: false,
+        text:
+          error.message ||
+          "Failed to record production.",
+      },
+    }));
   }
+}
 
   function submit(product) {
     const qty = Number(amounts[product.id] || 0);
@@ -1050,13 +1705,38 @@ function Production({ products, setProducts, recipes }) {
   }
 
   function openEdit(product) {
-    setSelectedProduct(product);
-    setProductForm({ sku: product.sku, name: product.name, category: product.category, price: product.price, minimum: product.minimum ?? 0, optionGroups: (product.optionGroups || []).map((g) => ({ ...g, options: (g.options || []).map((o) => ({ ...o, recipeChanges: (o.recipeChanges || []).map((c) => ({ ...c })) })) })) });
-    setFormError("");
-    setModal("product");
-  }
+  setSelectedProduct(product);
 
-  function saveProduct(event) {
+  setProductForm({
+    sku: product.sku,
+    name: product.name,
+    category: product.category,
+    price: product.price,
+    minimum: product.minimum ?? 0,
+
+    optionGroups: (product.optionGroups || []).map((g) => ({
+      ...g,
+      options: (g.options || []).map((o) => ({
+        ...o,
+        recipeChanges: (o.recipeChanges || []).map((c) => ({
+          ...c,
+        })),
+      })),
+    })),
+
+    variants: (product.variants || []).map((variant) => ({
+      ...variant,
+      selections: {
+        ...(variant.selections || {}),
+      },
+    })),
+  });
+
+  setFormError("");
+  setModal("product");
+}
+
+  async function saveProduct(event) {
     event.preventDefault();
     const error = validateProductSku(productForm, products, selectedProduct?.id ?? null);
     const optionError = validateProductOptions(productForm.optionGroups || []);
@@ -1070,8 +1750,64 @@ function Production({ products, setProducts, recipes }) {
       optionGroups: productForm.optionGroups || [],
     };
     if (selectedProduct) {
-      setProducts((current) => current.map((p) => p.id === selectedProduct.id ? { ...p, ...normalized } : p));
-    } else {
+  try {
+    // 1. Update main Production SKU
+    const { error: productError } = await supabase
+      .from("production_sku")
+      .update({
+        sku_code: normalized.sku,
+        sku_name: normalized.name,
+        category: normalized.category,
+        base_price: normalized.price,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", selectedProduct.id);
+
+    if (productError) throw productError;
+
+    // 2. Update each existing variant selling price
+    for (const variant of productForm.variants || []) {
+      const { error: variantError } = await supabase
+        .from("product_variant")
+        .update({
+          selling_price: Number(variant.price || 0),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", variant.id);
+
+      if (variantError) throw variantError;
+    }
+
+    // 3. Update React state
+    setProducts((current) =>
+      current.map((p) =>
+        p.id === selectedProduct.id
+          ? {
+              ...p,
+              ...normalized,
+
+              variants: (productForm.variants || []).map(
+                (variant) => ({
+                  ...variant,
+                  price: Number(variant.price || 0),
+                })
+              ),
+            }
+          : p
+      )
+    );
+
+  } catch (error) {
+    console.error("Production SKU update error:", error);
+
+    setFormError(
+      error.message ||
+      "Failed to update Production SKU."
+    );
+
+    return;
+  }
+} else {
       const nextId = Math.max(0, ...products.map((p) => Number(p.id) || 0)) + 1;
       setProducts((current) => [...current, {
         id: nextId,
@@ -1250,6 +1986,82 @@ function Production({ products, setProducts, recipes }) {
                     <button type="button" className="text-btn" onClick={() => addOption(gi)}><Plus size={15} /> Add option</button>
                   </div>)}
                 </div>
+                {selectedProduct && (productForm.variants || []).length > 0 && (
+  <div className="option-editor">
+    <div className="section-head option-editor-head">
+      <div>
+        <p className="eyebrow">VARIANT COMBINATIONS</p>
+        <strong>Combination Selling Price</strong>
+        <span className="muted">
+          Each combination can have its own selling price.
+        </span>
+      </div>
+    </div>
+
+    <div className="option-editor-options">
+      {(productForm.variants || []).map((variant, variantIndex) => {
+        const combinationName = (productForm.optionGroups || [])
+          .map((group) => {
+            const selectedOptionId =
+              variant.selections?.[group.id];
+
+            const option = (group.options || []).find(
+              (item) => item.id === selectedOptionId
+            );
+
+            return option?.name;
+          })
+          .filter(Boolean)
+          .join(" + ");
+
+        return (
+          <div
+            className="option-editor-row"
+            key={variant.id}
+          >
+            <div>
+              <strong>
+                {combinationName ||
+                  variant.name ||
+                  variant.code}
+              </strong>
+
+              <small className="muted">
+                {variant.code}
+              </small>
+            </div>
+
+            <label>
+              Selling Price (RM)
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={variant.price}
+                onChange={(e) => {
+                  const newPrice = e.target.value;
+
+                  setProductForm((current) => ({
+                    ...current,
+                    variants: current.variants.map(
+                      (item, index) =>
+                        index === variantIndex
+                          ? {
+                              ...item,
+                              price: newPrice,
+                            }
+                          : item
+                    ),
+                  }));
+                }}
+              />
+            </label>
+          </div>
+        );
+      })}
+    </div>
+  </div>
+)}
                 {formError && <div className="form-error product-form-error">{formError}</div>}
                 <div className="modal-actions"><button type="button" className="secondary-btn" onClick={() => setModal(null)}>Cancel</button><button className="primary-btn" type="submit">{selectedProduct ? "Save Changes" : "Add Product SKU"}</button></div>
               </form>
