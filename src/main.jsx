@@ -556,7 +556,11 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, rel
   }
 
   const subtotal = cart.reduce((sum, x) => sum + x.price * x.qty, 0);
-  const tax = subtotal * 0.06;
+  const taxableSubtotal = cart.reduce((sum, x) => {
+    const product = products.find((p) => p.id === x.productId);
+    return sum + (product?.taxApplicable !== false ? x.price * x.qty : 0);
+  }, 0);
+  const tax = taxableSubtotal * 0.06;
   const total = subtotal + tax;
 
   async function submitOrder(paymentStatus) {
@@ -1472,7 +1476,7 @@ function Production({ products, setProducts, recipes }) {
   const [modal, setModal] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [formError, setFormError] = useState("");
-  const [productForm, setProductForm] = useState({ sku: "", name: "", category: "", price: "", minimum: 0, optionGroups: [] });
+  const [productForm, setProductForm] = useState({ sku: "", name: "", category: "", price: "", minimum: 0, taxApplicable: true, optionGroups: [] });
   const [productionSelectionProduct, setProductionSelectionProduct] = useState(null);
   const [productionSelections, setProductionSelections] = useState({});
 
@@ -1649,7 +1653,7 @@ if (variantStockError) throw variantStockError;
         name: item.sku_name,
         category: item.category || "",
 
-        price: Number(item.base_price || 0),
+        price: Number(item.base_price || 0), taxApplicable: item.tax_applicable !== false,
 
         stock: totalRemaining,
         minimum: 0,
@@ -1873,7 +1877,7 @@ async function recordProduction(product, selected = {}) {
 
   function openAdd() {
     setSelectedProduct(null);
-    setProductForm({ sku: "", name: "", category: "", price: "", minimum: 0, optionGroups: [] });
+    setProductForm({ sku: "", name: "", category: "", price: "", minimum: 0, taxApplicable: true, optionGroups: [] });
     setFormError("");
     setModal("product");
   }
@@ -1887,6 +1891,7 @@ async function recordProduction(product, selected = {}) {
     category: product.category,
     price: product.price,
     minimum: product.minimum ?? 0,
+    taxApplicable: product.taxApplicable !== false,
 
     optionGroups: (product.optionGroups || []).map((g) => ({
       ...g,
@@ -1921,6 +1926,7 @@ async function recordProduction(product, selected = {}) {
       category: productForm.category.trim(),
       price: Number(productForm.price),
       minimum: Number(productForm.minimum || 0),
+      taxApplicable: productForm.taxApplicable !== false,
       optionGroups: productForm.optionGroups || [],
     };
     if (selectedProduct) {
@@ -1933,6 +1939,7 @@ async function recordProduction(product, selected = {}) {
         sku_name: normalized.name,
         category: normalized.category,
         base_price: normalized.price,
+        tax_applicable: normalized.taxApplicable,
         updated_at: new Date().toISOString(),
       })
       .eq("id", selectedProduct.id);
@@ -2157,7 +2164,7 @@ async function recordProduction(product, selected = {}) {
                 <label>Product SKU Code<input autoFocus value={productForm.sku} onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })} placeholder="e.g. BUR-002" /></label>
                 <label>Product Name<input value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} placeholder="Product description" /></label>
                 <label>Category<input value={productForm.category} onChange={(e) => setProductForm({ ...productForm, category: e.target.value })} placeholder="e.g. Burger" /></label>
-                <label>Selling Price (RM)<input type="number" min="0" step="0.01" value={productForm.price} onChange={(e) => setProductForm({ ...productForm, price: e.target.value })} /></label>
+                <label>Selling Price (RM)<input type="number" min="0" step="0.01" value={productForm.price} onChange={(e) => setProductForm({ ...productForm, price: e.target.value })} /></label><label className="inline-check"><input type="checkbox" checked={productForm.taxApplicable !== false} onChange={(e) => setProductForm({ ...productForm, taxApplicable: e.target.checked })} /> Apply 6% Tax</label>
                 <label>Minimum Product Stock<input type="number" min="0" step="1" value={productForm.minimum} onChange={(e) => setProductForm({ ...productForm, minimum: e.target.value })} /></label>
                 <div className="option-editor">
                   <div className="section-head option-editor-head"><div><p className="eyebrow">SELLING OPTIONS</p><strong>Size / Variant / Flavour</strong><span className="muted">Optional. Recipe-impacting options can define ingredient changes in Recipe Management.</span></div><button type="button" className="secondary-btn" onClick={addOptionGroup}><Plus size={16} /> Add Group</button></div>
@@ -2402,7 +2409,7 @@ function App() {
           return { id: variant.id, code: variant.variant_code, name: variant.variant_name || "", price: Number(variant.selling_price || 0), produced, stock: Number(stockRow?.current_stock || 0), minimumStock: Number(stockRow?.minimum_stock || 0), selections };
         });
         return {
-          id: item.id, skuType: "product", sku: item.sku_code, name: item.sku_name, category: item.category || "", price: Number(item.base_price || 0),
+          id: item.id, skuType: "product", sku: item.sku_code, name: item.sku_name, category: item.category || "", price: Number(item.base_price || 0), taxApplicable: item.tax_applicable !== false,
           stock: variants.reduce((sum, variant) => sum + Number(variant.stock || 0), 0), minimum: 0,
           produced: variants.reduce((sum, variant) => sum + Number(variant.produced || 0), 0), sold: 0, optionGroups, variants,
         };
