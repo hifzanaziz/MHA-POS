@@ -923,3 +923,20 @@ body {
   .variation-recipe-banner { flex-direction:column; }
 }
 .order-option-summary { display:block; margin-top:4px; color:var(--muted); font-size:11px; }
+
+
+/* Config module layout refinement */
+.config-page { display:flex; flex-direction:column; gap:20px; }
+.config-page .hero-panel { grid-column:auto; }
+.config-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; align-items:start; }
+.config-card { padding:22px; min-width:0; overflow:hidden; }
+.config-card .section-head { margin-bottom:16px; }
+.config-card .section-head > div { min-width:0; }
+.config-card .eyebrow { display:block; white-space:normal; overflow:visible; line-height:1.25; margin-bottom:6px; }
+.config-card h3 { white-space:normal; overflow-wrap:anywhere; line-height:1.25; }
+.config-add-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; }
+.config-add-row input { width:100%; min-width:0; }
+.config-card .alert-list { margin-top:12px; }
+.config-card .alert-row .grow strong { white-space:normal; overflow-wrap:anywhere; }
+@media (max-width:1100px) { .config-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:700px) { .config-grid { grid-template-columns:1fr; } .config-card { padding:18px; } }
