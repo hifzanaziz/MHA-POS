@@ -2179,7 +2179,8 @@ function App() {
   const [user, setUser] = useState(null);
   const [page, setPage] = useState("dashboard");
   const [products, setProducts] = useState(productsSeed);
-  const [orders, setOrders] = useState([]);\n  const [inventoryUsage, setInventoryUsage] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [inventoryUsage, setInventoryUsage] = useState([]);
   const [recipes, setRecipes] = useState({
     1: [
       { inventorySkuId: 101, qtyRecipeUom: 200 },
