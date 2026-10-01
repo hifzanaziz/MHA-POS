@@ -2328,11 +2328,16 @@ function Config({ options, reloadConfig }) {
   }
 
   return (
-    <div className="config-page">\n      <section className="hero-panel">\n        <div><p className="eyebrow">MASTER CONFIGURATION</p><h1>Config</h1><p>Maintain reusable categories and UOM values used by Inventory and Production SKU.</p></div>\n      </section>\n      <section className="config-grid">
+    <div className="config-page">
+      <section className="hero-panel">
+        <div><p className="eyebrow">MASTER CONFIGURATION</p><h1>Config</h1><p>Maintain reusable categories and UOM values used by Inventory and Production SKU.</p></div>
+      </section>
+      <section className="config-grid">
         {groups.map(([type, title]) => (
           <article className="table-card config-card" key={type}>
             <div className="section-head"><div><p className="eyebrow">MASTER LIST</p><h3>{title}</h3></div></div>
-            <div className="config-add-row">\n              <input value={values[type]} onChange={(e) => setValues((current) => ({ ...current, [type]: e.target.value }))} placeholder={`Add ${title}`} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(type); } }} />
+            <div className="config-add-row">
+              <input value={values[type]} onChange={(e) => setValues((current) => ({ ...current, [type]: e.target.value }))} placeholder={`Add ${title}`} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(type); } }} />
               <button className="primary-btn" onClick={() => add(type)}><Plus size={16} /> Add</button>
             </div>
             <div className="alert-list">
