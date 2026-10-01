@@ -1839,12 +1839,16 @@ async function recordProduction(product, selected = {}) {
   function submit(product) {
     const qty = Number(amounts[product.id] || 0);
     if (!qty || qty < 1) return;
-    if ((product.optionGroups || []).length) {
-      const defaults = {};
-      (product.optionGroups || []).forEach((group) => { if (!group.required && group.options?.length === 0) defaults[group.id] = ""; });
-      setProductionSelections(defaults); setProductionSelectionProduct(product); return;
+    if ((product.variants || []).length) {
+      setProductionSelections({});
+      setProductionSelectionProduct(product);
+      return;
     }
     recordProduction(product, {});
+  }
+
+  function recordProductionVariant(product, variant) {
+    recordProduction(product, { ...(variant.selections || {}) });
   }
 
   function openAdd() {
@@ -2241,7 +2245,30 @@ async function recordProduction(product, selected = {}) {
           </div>
         </div>
       )}
-      {productionSelectionProduct && <OptionSelectionModal product={productionSelectionProduct} selections={productionSelections} setSelections={setProductionSelections} title="Select Production Variation" actionLabel="Record Production" onCancel={() => setProductionSelectionProduct(null)} onConfirm={() => recordProduction(productionSelectionProduct, productionSelections)} />}
+      {productionSelectionProduct && (
+        <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setProductionSelectionProduct(null)}>
+          <div className="modal-card option-selection-modal" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <div><p className="eyebrow">RECORD PRODUCTION</p><h3>{productionSelectionProduct.name}</h3><span className="muted">Select the exact Product Variant to produce.</span></div>
+              <button className="icon-btn" onClick={() => setProductionSelectionProduct(null)}><X size={18} /></button>
+            </div>
+            <div className="option-selection-list">
+              <div className="option-group-card">
+                <div className="option-group-head"><strong>Product Variant</strong><span>Existing active variants only</span></div>
+                <div className="option-choice-grid">
+                  {(productionSelectionProduct.variants || []).map((variant) => (
+                    <button key={variant.id} className="option-choice" onClick={() => recordProductionVariant(productionSelectionProduct, variant)}>
+                      <strong>{variant.name || variant.code}</strong>
+                      <span>Produced {variant.produced || 0} • Remaining {variant.stock || 0}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="modal-actions"><button className="secondary-btn" onClick={() => setProductionSelectionProduct(null)}>Cancel</button></div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
