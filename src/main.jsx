@@ -471,7 +471,7 @@ function OptionSelectionModal({ product, selections, setSelections, onCancel, on
   );
 }
 
-function OrderTaking({ products, setProducts, orders, setOrders, onNavigate }) {
+function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, reloadOrders }) {
   const [cart, setCart] = useState([]);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
@@ -526,14 +526,44 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate }) {
   const tax = subtotal * 0.06;
   const total = subtotal + tax;
 
-  function submitOrder(paymentStatus) {
+  async function submitOrder(paymentStatus) {
     if (!cart.length) return;
     try {
-      const nextNumber = orders.length + 1;
-      const orderId = `ORD-${String(nextNumber).padStart(5, "0")}`;
-      const result = createOrderRecord(products, cart.map((item) => ({ ...item, id: item.productId ?? item.id })), { orderId, paymentStatus, customerName, customerTelephone });
-      setProducts(result.products);
-      setOrders((current) => [result.order, ...current]);
+      const rpcItems = cart.map((item) => {
+        const product = products.find((p) => p.id === item.productId);
+        const selectedIds = Object.values(item.selections || {}).filter(Boolean).sort();
+        const variant = (product?.variants || []).find((v) =>
+          JSON.stringify(Object.values(v.selections || {}).filter(Boolean).sort()) === JSON.stringify(selectedIds)
+        );
+        if (!variant) throw new Error("No Product Variant matches the selected options.");
+        return {
+          product_variant_id: variant.id,
+          quantity: item.qty,
+          options: (item.selectedOptions || []).map((option) => {
+            const group = (product.optionGroups || []).find((g) => g.id === option.groupId);
+            const value = group?.options?.find((x) => x.id === option.optionId);
+            return { variation_type_id: group?.databaseId || null, variation_value_id: value?.databaseId || null, group_name: option.groupName, value_name: option.optionName };
+          }),
+        };
+      });
+      const { data: orderId, error } = await supabase.rpc("create_sales_order", {
+        p_customer_name: customerName || null,
+        p_customer_telephone: customerTelephone || null,
+        p_payment_status: paymentStatus,
+        p_items: rpcItems,
+      });
+      if (error) throw error;
+      const { data: stockRows, error: stockError } = await supabase.from("product_variant_stock").select("*");
+      if (stockError) throw stockError;
+      setProducts((current) => current.map((product) => {
+        if (product.skuType === "inventory") return product;
+        const variants = (product.variants || []).map((variant) => {
+          const row = (stockRows || []).find((x) => x.product_variant_id === variant.id);
+          return { ...variant, stock: Number(row?.current_stock || 0) };
+        });
+        return { ...product, variants, stock: variants.reduce((sum, variant) => sum + Number(variant.stock || 0), 0) };
+      }));
+      if (reloadOrders) await reloadOrders();
       setCart([]); setCustomerName(""); setCustomerTelephone("");
       alert(paymentStatus === "Completed" ? `${orderId} payment completed successfully.` : `${orderId} saved as Pay Later.`);
     } catch (error) { alert(error.message); }
@@ -564,7 +594,7 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate }) {
 }
 
 
-function OrderHistory({ orders, setOrders, products, setProducts }) {
+function OrderHistory({ orders, setOrders, products, setProducts, reloadOrders }) {
   const [selected, setSelected] = useState(null);
   const [modal, setModal] = useState(null);
   const [query, setQuery] = useState("");
@@ -606,24 +636,23 @@ function OrderHistory({ orders, setOrders, products, setProducts }) {
     setModal("pickup");
   }
 
-  function completePayment() {
+  async function completePayment() {
     try {
-      const result = completeOrderPayment(products, selected);
-      setProducts(result.products);
-      setOrders((current) => current.map((order) => order.id === selected.id ? result.order : order));
-      setSelected(result.order);
+      const { error } = await supabase.rpc("complete_sales_order_payment", { p_order_no: selected.id });
+      if (error) throw error;
+      await reloadOrders();
       setModal(null);
       alert(`${selected.id} payment completed successfully.`);
-    } catch (error) {
-      alert(error.message);
-    }
+    } catch (error) { alert(error.message); }
   }
 
-  function confirmPickup() {
-    const updated = completeOrderPickup(selected);
-    setOrders((current) => current.map((order) => order.id === selected.id ? updated : order));
-    setSelected(updated);
-    setModal(null);
+  async function confirmPickup() {
+    try {
+      const { error } = await supabase.rpc("complete_sales_order_pickup", { p_order_no: selected.id });
+      if (error) throw error;
+      await reloadOrders();
+      setModal(null);
+    } catch (error) { alert(error.message); }
   }
 
   function formatDate(value) {
@@ -2184,13 +2213,31 @@ function App() {
     ],
   });
 
+  async function loadOrders() {
+    const { data, error } = await supabase.from("sales_order").select("*, sales_order_item(*, sales_order_item_option(*))").order("created_at", { ascending: false });
+    if (error) { console.error("Load orders error:", error); return; }
+    setOrders((data || []).map((order) => ({
+      id: order.order_no, orderDate: order.created_at, customerName: order.customer_name || "", customerTelephone: order.customer_telephone || "",
+      subtotal: Number(order.subtotal || 0), tax: Number(order.tax_amount || 0), grandTotal: Number(order.grand_total || 0),
+      paymentStatus: order.payment_status, pickupStatus: order.pickup_status,
+      items: (order.sales_order_item || []).map((item) => ({
+        id: item.id, productId: item.production_sku_id, variantId: item.product_variant_id, sku: item.variant_code || item.sku_code,
+        name: item.sku_name, price: Number(item.unit_price || 0), qty: Number(item.quantity || 0), lineTotal: Number(item.line_total || 0),
+        selectedOptions: (item.sales_order_item_option || []).map((option) => ({ groupName: option.option_group_name, optionName: option.option_value_name })),
+      })),
+    })));
+  }
+
+  useEffect(() => { if (user) loadOrders(); }, [user]);
+
+
   if (!user) return <Login onLogin={setUser} />;
 
   return (
     <AppShell user={user} page={page} setPage={setPage} onLogout={() => { setUser(null); setPage("dashboard"); }}>
-      {page === "dashboard" && <Dashboard products={products} orders={orders} recipes={recipes} onNavigate={setPage} />}
+      {page === "dashboard" && <Dashboard products={products} orders={orders} recipes={recipes} onNavigate={setPage} reloadOrders={loadOrders} />}
       {page === "order" && <OrderTaking products={products} setProducts={setProducts} orders={orders} setOrders={setOrders} onNavigate={setPage} />}
-      {page === "orderHistory" && <OrderHistory orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} />}
+      {page === "orderHistory" && <OrderHistory orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} reloadOrders={loadOrders} />}
       {page === "inventory" && <Inventory products={products} setProducts={setProducts} />}
       {page === "recipe" && <RecipeManagement products={products} recipes={recipes} setRecipes={setRecipes} setProducts={setProducts} />}
       {page === "production" && <Production products={products} setProducts={setProducts} recipes={recipes} />}
