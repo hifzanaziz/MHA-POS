@@ -2446,7 +2446,9 @@ function PublicOrderPage() {
     </div>}</div>;
 }
 
-function App() {\n  const isPublicOrder = window.location.pathname === "/order" || window.location.pathname === "/customer-order";\n  const [user, setUser] = useState(null);
+function App() {
+  const isPublicOrder = window.location.pathname === "/order" || window.location.pathname === "/customer-order";
+  const [user, setUser] = useState(null);
   const [page, setPage] = useState("dashboard");
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -2607,7 +2609,8 @@ function App() {\n  const isPublicOrder = window.location.pathname === "/order" 
   useEffect(() => { if (user) { loadMasterData(); loadOrders(); loadInventoryUsage(); loadConfig(); } }, [user]);
 
 
-  if (isPublicOrder) return <PublicOrderPage />;\n  if (!user) return <Login onLogin={setUser} />;
+  if (isPublicOrder) return <PublicOrderPage />;
+  if (!user) return <Login onLogin={setUser} />;
 
   return (
     <AppShell user={user} page={page} setPage={setPage} onLogout={() => { setUser(null); setPage("dashboard"); }}>
