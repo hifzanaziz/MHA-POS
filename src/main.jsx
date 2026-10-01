@@ -2357,8 +2357,96 @@ function Config({ options, reloadConfig }) {
   );
 }
 
-function App() {
-  const [user, setUser] = useState(null);
+
+function PublicOrderPage() {
+  const [products, setProducts] = useState([]);
+  const [cart, setCart] = useState([]);
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState("All");
+  const [customerName, setCustomerName] = useState("");
+  const [customerTelephone, setCustomerTelephone] = useState("");
+  const [selectionProduct, setSelectionProduct] = useState(null);
+  const [selections, setSelections] = useState({});
+  const [selectionQuantity, setSelectionQuantity] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [confirmation, setConfirmation] = useState(null);
+
+  async function loadMenu() {
+    setLoading(true);
+    const { data, error } = await supabase.rpc("get_public_order_menu");
+    if (error) { setLoading(false); return alert(error.message); }
+    const menu = data || {};
+    const types = menu.types || [], values = menu.values || [], variants = menu.variants || [];
+    setProducts((menu.products || []).map((p) => {
+      const productTypes = types.filter((t) => t.production_sku_id === p.id);
+      const optionGroups = productTypes.map((t) => ({
+        id: `type-${t.id}`, databaseId: t.id, name: t.name, required: true, priceImpact: true, recipeImpact: true,
+        options: values.filter((v) => v.variation_type_id === t.id).map((v) => ({ id: `value-${v.id}`, databaseId: v.id, name: v.name, priceAdjustment: 0, recipeChanges: [] })),
+      }));
+      const productVariants = variants.filter((v) => v.production_sku_id === p.id).map((v) => {
+        const selections = {};
+        productTypes.forEach((t) => {
+          const value = values.find((x) => x.variation_type_id === t.id && (v.value_ids || []).includes(x.id));
+          if (value) selections[`type-${t.id}`] = `value-${value.id}`;
+        });
+        return { id:v.id, code:v.code, name:v.name || "", price:Number(v.price || 0), stock:Number(v.stock || 0), selections };
+      });
+      return { id:p.id, skuType:"product", sku:p.sku, name:p.name, category:p.category || "", price:Number(p.price || 0), taxApplicable:p.tax_applicable !== false, optionGroups, variants:productVariants, stock:productVariants.reduce((s,v)=>s+v.stock,0) };
+    }));
+    setLoading(false);
+  }
+
+  useEffect(() => { loadMenu(); }, []);
+
+  const categories = ["All", ...new Set(products.map((p) => p.category).filter(Boolean))];
+  const filtered = products.filter((p) => (category === "All" || p.category === category) && (p.name.toLowerCase().includes(query.toLowerCase()) || p.sku.toLowerCase().includes(query.toLowerCase())));
+
+  function openProduct(product) {
+    if (product.stock <= 0) return;
+    setSelectionProduct(product); setSelectionQuantity(1); setSelections({});
+  }
+  function addConfigured(product, selected, ignoredPrice, quantity=1) {
+    const selectedIds=Object.values(selected||{}).filter(Boolean).sort();
+    const variant=(product.variants||[]).find((v)=>JSON.stringify(Object.values(v.selections||{}).filter(Boolean).sort())===JSON.stringify(selectedIds));
+    if(!variant) return alert("Please select an available product option.");
+    const selectedOptions=(product.optionGroups||[]).flatMap((group)=>{const option=group.options?.find((x)=>x.id===selected[group.id]);return option?[{groupId:group.id,groupName:group.name,optionId:option.id,optionName:option.name}]:[];});
+    const key=`${product.id}-${variant.id}`;
+    setCart((current)=>{const found=current.find((x)=>x.id===key);const addQty=Math.min(Math.max(1,Number(quantity||1)),variant.stock);if(found)return current.map((x)=>x.id===key?{...x,qty:Math.min(x.qty+addQty,variant.stock)}:x);return [...current,{...product,id:key,productId:product.id,variantId:variant.id,price:variant.price,stock:variant.stock,selectedOptions,qty:addQty}];});
+    setSelectionProduct(null); setSelections({});
+  }
+  function adjust(id,delta){setCart((current)=>current.map((x)=>x.id===id?{...x,qty:Math.max(0,Math.min(x.qty+delta,x.stock))}:x).filter((x)=>x.qty>0));}
+  const subtotal=cart.reduce((s,x)=>s+x.price*x.qty,0);
+  const taxableSubtotal=cart.reduce((s,x)=>s+(x.taxApplicable!==false?x.price*x.qty:0),0);
+  const tax=taxableSubtotal*0.06,total=subtotal+tax;
+
+  async function placeOrder(){
+    if(!customerName.trim()||!customerTelephone.trim()) return alert("Customer name and telephone number are required.");
+    if(!cart.length) return;
+    setSubmitting(true);
+    const items=cart.map((item)=>({product_variant_id:item.variantId,quantity:item.qty,options:(item.selectedOptions||[]).map((o)=>{const g=item.optionGroups.find((x)=>x.id===o.groupId);const v=g?.options?.find((x)=>x.id===o.optionId);return {variation_type_id:g?.databaseId||null,variation_value_id:v?.databaseId||null,group_name:o.groupName,value_name:o.optionName};})}));
+    const {data,error}=await supabase.rpc("create_public_sales_order",{p_customer_name:customerName.trim(),p_customer_telephone:customerTelephone.trim(),p_items:items});
+    setSubmitting(false);
+    if(error) return alert(error.message);
+    setConfirmation(data); setCart([]); setCustomerName(""); setCustomerTelephone(""); await loadMenu();
+  }
+
+  if(confirmation) return <div className="public-order-page"><div className="public-order-header"><div><strong>HanaAzz Enterprise</strong><span>Customer Order</span></div></div><div className="public-confirmation"><PackageCheck size={48}/><p className="eyebrow">ORDER SUBMITTED</p><h1>Thank you!</h1><p>Your order has been sent to the store.</p><div className="public-order-number"><span>Order No.</span><strong>{confirmation.order_no}</strong></div><div className="bill"><div><span>Total</span><strong>{money(confirmation.grand_total)}</strong></div><div><span>Payment</span><strong>Pay Later</strong></div></div><p className="muted">Please proceed to the counter for payment.</p><button className="primary-btn full" onClick={()=>setConfirmation(null)}>Create Another Order</button></div></div>;
+
+  return <div className="public-order-page">
+    <div className="public-order-header"><div><strong>HanaAzz Enterprise</strong><span>Customer Order</span></div><span className="system-status"><span className="status-dot"/> Online</span></div>
+    {loading ? <div className="public-loading">Loading menu...</div> : <div className="pos-layout public-pos">
+      <section className="product-zone"><div className="toolbar"><div className="search-box"><Search size={18}/><input value={query} onChange={(e)=>setQuery(e.target.value)} placeholder="Search product..."/></div><div className="category-strip">{categories.map((x)=><button key={x} className={category===x?"selected":""} onClick={()=>setCategory(x)}>{x}</button>)}</div></div>
+      <div className="product-grid">{filtered.map((p)=><button key={p.id} className={`product-card ${p.stock===0?"disabled":""}`} disabled={p.stock===0} onClick={()=>openProduct(p)}><span className="product-category">{p.category}</span><strong>{p.name}</strong><span className="sku">{p.sku}</span><div className="product-bottom"><b>{money(p.price)}</b><span>{p.stock} left</span></div></button>)}</div></section>
+      <aside className="cart-panel"><div className="section-head"><div><p className="eyebrow">YOUR ORDER</p><h3>Order Summary</h3></div><span className="cart-count">{cart.reduce((a,x)=>a+x.qty,0)}</span></div>
+      <div className="customer-info-box"><div className="customer-info-title"><strong>Customer Info</strong><span>Required</span></div><div className="customer-info-grid"><label>Name *<input required value={customerName} onChange={(e)=>setCustomerName(e.target.value)} placeholder="Your name"/></label><label>Telephone No. *<input required value={customerTelephone} onChange={(e)=>setCustomerTelephone(e.target.value)} placeholder="e.g. 0123456789"/></label></div></div>
+      <div className="cart-items">{!cart.length&&<div className="empty-state"><ShoppingCart size={30}/><strong>No items yet</strong><span>Select an item to start your order.</span></div>}{cart.map((x)=><div className="cart-item" key={x.id}><div className="grow"><strong>{x.name}</strong>{x.selectedOptions?.length>0&&<span>{x.selectedOptions.map((o)=>`${o.groupName}: ${o.optionName}`).join(" • ")}</span>}<span>{money(x.price)} each</span></div><div className="qty"><button onClick={()=>adjust(x.id,-1)}><Minus size={15}/></button><span>{x.qty}</span><button onClick={()=>adjust(x.id,1)}><Plus size={15}/></button></div><strong>{money(x.price*x.qty)}</strong></div>)}</div>
+      <div className="bill"><div><span>Subtotal</span><strong>{money(subtotal)}</strong></div><div><span>Tax 6%</span><strong>{money(tax)}</strong></div><div className="total"><span>Total</span><strong>{money(total)}</strong></div><button className="primary-btn full" disabled={!cart.length||!customerName.trim()||!customerTelephone.trim()||submitting} onClick={placeOrder}>{submitting?"Submitting...":`Place Order • ${money(total)}`}</button><small className="muted">Payment will be made at the counter.</small></div></aside>
+      {selectionProduct&&<OptionSelectionModal product={selectionProduct} selections={selections} setSelections={setSelections} quantity={selectionQuantity} setQuantity={setSelectionQuantity} maxQuantity={selectionProduct.stock||null} onCancel={()=>setSelectionProduct(null)} onConfirm={(price)=>addConfigured(selectionProduct,selections,price,selectionQuantity)} actionLabel="Add to Order"/>}
+    </div>}</div>;
+}
+
+function App() {\n  const isPublicOrder = window.location.pathname === "/order" || window.location.pathname === "/customer-order";\n  const [user, setUser] = useState(null);
   const [page, setPage] = useState("dashboard");
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -2519,7 +2607,7 @@ function App() {
   useEffect(() => { if (user) { loadMasterData(); loadOrders(); loadInventoryUsage(); loadConfig(); } }, [user]);
 
 
-  if (!user) return <Login onLogin={setUser} />;
+  if (isPublicOrder) return <PublicOrderPage />;\n  if (!user) return <Login onLogin={setUser} />;
 
   return (
     <AppShell user={user} page={page} setPage={setPage} onLogout={() => { setUser(null); setPage("dashboard"); }}>
