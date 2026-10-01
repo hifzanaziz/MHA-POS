@@ -1755,6 +1755,10 @@ async function recordProduction(product, selected = {}) {
 
               return {
                 ...variant,
+                produced:
+                  variant.id === matchedVariant?.id
+                    ? Number(variant.produced || 0) + qty
+                    : Number(variant.produced || 0),
                 stock: Number(stockRow?.current_stock || 0),
                 minimumStock: Number(stockRow?.minimum_stock || 0),
               };
