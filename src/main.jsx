@@ -1991,16 +1991,31 @@ async function recordProduction(product, selected = {}) {
     return;
   }
 } else {
-      const nextId = Math.max(0, ...products.map((p) => Number(p.id) || 0)) + 1;
-      setProducts((current) => [...current, {
-        id: nextId,
-        skuType: "product",
-        ...normalized,
-        stock: 0,
-        produced: 0,
-        sold: 0,
-        optionGroups: normalized.optionGroups,
-      }]);
+      try {
+        const sizeGroup = (normalized.optionGroups || []).find((group) => String(group.name || "").trim().toLowerCase() === "size") || (normalized.optionGroups || [])[0];
+        const options = (sizeGroup?.options || []).map((option) => ({
+          name: String(option.name || "").trim(),
+          price: Number(normalized.price || 0) + Number(option.priceAdjustment || 0),
+        })).filter((option) => option.name);
+
+        const { error: createError } = await supabase.rpc("create_production_sku", {
+          p_sku_code: normalized.sku,
+          p_sku_name: normalized.name,
+          p_category: normalized.category || null,
+          p_base_price: normalized.price,
+          p_tax_applicable: normalized.taxApplicable,
+          p_options: options,
+        });
+        if (createError) throw createError;
+
+        setModal(null);
+        window.location.reload();
+        return;
+      } catch (error) {
+        console.error("Production SKU create error:", error);
+        setFormError(error.message || "Failed to create Production SKU.");
+        return;
+      }
     }
     setModal(null);
   }
