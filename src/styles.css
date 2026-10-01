@@ -959,3 +959,8 @@ body {
 .public-confirmation .bill { text-align:left; margin-bottom:20px; }
 .public-confirmation .primary-btn { margin-top:22px; }
 @media(max-width:800px){.public-order-header{padding:12px 16px}.public-pos{padding:14px}.public-pos.pos-layout{grid-template-columns:1fr}.public-pos .cart-panel{position:static}.public-confirmation{margin:30px auto;padding:24px}}
+
+.customer-info-error { border-color:#dc2626 !important; box-shadow:0 0 0 3px rgba(220,38,38,.08); }
+.customer-validation-message { margin:10px 0 12px; padding:10px 12px; border-radius:10px; background:#fef2f2; color:#b91c1c; font-size:.82rem; font-weight:700; }
+.customer-info-box .input-error { border-color:#dc2626 !important; background:#fffafa; }
+.field-error { display:block; margin-top:5px; color:#b91c1c; font-size:.75rem; font-weight:600; }
