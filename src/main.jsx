@@ -302,8 +302,6 @@ function Dashboard({ products, orders, recipes, onNavigate }) {
     .sort((a, b) => b.sold - a.sold || String(a.name).localeCompare(String(b.name)))
     .slice(0, 5)
     .map((item) => ({ ...item, label: item.name }));
-  const inventoryUsage = new Map();
-  products.filter((p) => p.skuType === "inventory").forEach((item) => inventoryUsage.set(item.id, { id: item.id, name: item.name, usage: 0, uom: item.recipeUom || "" }));
   const topInventory = getTopInventoryUsage(products, recipes).map((item) => ({ ...item, label: `${item.name} (${item.uom})` }));
   const sellingTrend = getSellingTrend(orders, trendRange);
   const alerts = getStockAlerts(products);
