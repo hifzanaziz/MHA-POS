@@ -1326,18 +1326,17 @@ function RecipeManagement({ products, recipes, setRecipes }) {
     setMessage("");
     const product = productSkus.find((p) => p.id === Number(productId));
     const variantIds = (product?.variants || []).map((v) => v.id);
-    const [{ data: baseData, error: baseError }, { data: variantData, error: variantError }] = await Promise.all([
-      supabase.from("product_recipe").select("inventory_sku_id, quantity").eq("production_sku_id", Number(productId)).order("id"),
-      variantIds.length
-        ? supabase.from("variant_recipe").select("product_variant_id, inventory_sku_id, quantity").in("product_variant_id", variantIds).order("id")
-        : Promise.resolve({ data: [], error: null }),
-    ]);
-    if (baseError || variantError) {
-      console.error("Load recipe error:", baseError || variantError);
-      setMessage((baseError || variantError)?.message || "Failed to load recipe.");
+    const { data: recipeData, error: recipeError } = await supabase.rpc("get_recipe_management", {
+      p_production_sku_id: Number(productId),
+    });
+    if (recipeError) {
+      console.error("Load recipe error:", recipeError);
+      setMessage(recipeError.message || "Failed to load recipe.");
       return;
     }
-    const baseLines = (baseData || []).map((line) => ({ inventorySkuId: line.inventory_sku_id, qtyRecipeUom: Number(line.quantity) }));
+    const baseData = recipeData?.base || [];
+    const variantData = recipeData?.variants || [];
+    const baseLines = baseData.map((line) => ({ inventorySkuId: line.inventory_sku_id, qtyRecipeUom: Number(line.quantity) }));
     setDraft(baseLines);
     setRecipes((current) => ({ ...current, [Number(productId)]: baseLines }));
     const byVariant = {};
@@ -1534,7 +1533,7 @@ if (variantStockError) throw variantStockError;
     // already expected by the MHA POS frontend.
     const supabaseProducts = (productData || []).map((item) => {
       const productTypes = (typeData || []).filter(
-        (type) => type.production_sku_id === item.id
+        (type) => type.production_sku_id === item.id && type.type_name === "Size"
       );
 
       const optionGroups = productTypes.map((type) => ({
