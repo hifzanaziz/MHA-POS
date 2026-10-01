@@ -61,9 +61,32 @@ export function getTopInventoryUsage(products, recipes, limit = 5) {
 export function getStockAlerts(products) {
   const alerts = { inventory: [], product: [] };
   for (const item of products || []) {
-    if (Number(item.stock || 0) > Number(item.minimum || 0)) continue;
-    if (item.skuType === 'inventory') alerts.inventory.push(item);
-    else alerts.product.push(item);
+    if (item.skuType === 'inventory') {
+      if (Number(item.stock || 0) <= Number(item.minimum || 0)) alerts.inventory.push(item);
+      continue;
+    }
+
+    const variants = item.variants || [];
+    if (variants.length) {
+      variants.forEach((variant) => {
+        const stock = Number(variant.stock || 0);
+        const minimum = Number(variant.minimumStock || 0);
+        if (stock <= minimum) {
+          alerts.product.push({
+            ...item,
+            id: `${item.id}-variant-${variant.id}`,
+            name: `${item.name} — ${variant.name || variant.code}`,
+            sku: variant.code || item.sku,
+            stock,
+            minimum,
+            variantId: variant.id,
+          });
+        }
+      });
+      continue;
+    }
+
+    if (Number(item.stock || 0) <= Number(item.minimum || 0)) alerts.product.push(item);
   }
   return alerts;
 }
