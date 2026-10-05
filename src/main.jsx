@@ -53,7 +53,7 @@ import { getNetSalesSummary, getTopProductSales, getTopInventoryUsage, getStockA
 
 const productsSeed = [
   { id: 1, skuType: "product", sku: "KR-SS-001", name: "Samperit Susu", category: "Kuih Raya", price: 20, stock: 24, minimum: 8, produced: 40, sold: 16, optionGroups: [
-    { id: "size", name: "Size", required: true, priceImpact: true, recipeImpact: true, options: [
+    { id: "size", name: "Size", required: type.is_required !== false, priceImpact: type.price_impact !== false, recipeImpact: type.recipe_impact !== false, options: [
       { id: "regular", name: "Regular", priceAdjustment: 0, recipeChanges: [] },
       { id: "large", name: "Large", priceAdjustment: 5, recipeChanges: [{ inventorySkuId: 101, qtyRecipeUom: 50, mode: "add" }] },
     ] },
@@ -1567,9 +1567,9 @@ if (variantStockError) throw variantStockError;
 
         name: type.type_name,
 
-        required: false,
-        priceImpact: true,
-        recipeImpact: true,
+        required: type.is_required !== false,
+        priceImpact: type.price_impact !== false,
+        recipeImpact: type.recipe_impact !== false,
 
         options: (valueData || [])
           .filter(
@@ -1582,7 +1582,7 @@ if (variantStockError) throw variantStockError;
 
             name: value.value_name,
 
-            priceAdjustment: 0,
+            priceAdjustment: Number(value.price_adjustment || 0),
             recipeChanges: [],
           })),
       }));
@@ -1967,7 +1967,12 @@ async function recordProduction(product, selected = {}) {
       if (group.databaseId) {
         const { error: groupError } = await supabase
           .from("variation_type")
-          .update({ type_name: String(group.name || "").trim() })
+          .update({
+            type_name: String(group.name || "").trim(),
+            is_required: !!group.required,
+            price_impact: group.priceImpact !== false,
+            recipe_impact: !!group.recipeImpact,
+          })
           .eq("id", group.databaseId)
           .eq("production_sku_id", selectedProduct.id);
         if (groupError) throw groupError;
@@ -1977,7 +1982,10 @@ async function recordProduction(product, selected = {}) {
         if (option.databaseId) {
           const { error: optionError } = await supabase
             .from("variation_value")
-            .update({ value_name: String(option.name || "").trim() })
+            .update({
+              value_name: String(option.name || "").trim(),
+              price_adjustment: Number(option.priceAdjustment || 0),
+            })
             .eq("id", option.databaseId);
           if (optionError) throw optionError;
         }
@@ -2433,7 +2441,7 @@ function PublicOrderPage() {
     setProducts((menu.products || []).map((p) => {
       const productTypes = types.filter((t) => t.production_sku_id === p.id);
       const optionGroups = productTypes.map((t) => ({
-        id: `type-${t.id}`, databaseId: t.id, name: t.name, required: true, priceImpact: true, recipeImpact: true,
+        id: `type-${t.id}`, databaseId: t.id, name: t.name, required: type.is_required !== false, priceImpact: type.price_impact !== false, recipeImpact: type.recipe_impact !== false,
         options: values.filter((v) => v.variation_type_id === t.id).map((v) => ({ id: `value-${v.id}`, databaseId: v.id, name: v.name, priceAdjustment: 0, recipeChanges: [] })),
       }));
       const productVariants = variants.filter((v) => v.production_sku_id === p.id).map((v) => {
@@ -2627,9 +2635,9 @@ function App() {
       const production = (productData || []).map((item) => {
         const productTypes = (typeData || []).filter((type) => type.production_sku_id === item.id && type.type_name === "Size");
         const optionGroups = productTypes.map((type) => ({
-          id: `type-${type.id}`, databaseId: type.id, name: type.type_name, required: true, priceImpact: true, recipeImpact: true,
+          id: `type-${type.id}`, databaseId: type.id, name: type.type_name, required: type.is_required !== false, priceImpact: type.price_impact !== false, recipeImpact: type.recipe_impact !== false,
           options: (valueData || []).filter((value) => value.variation_type_id === type.id).map((value) => ({
-            id: `value-${value.id}`, databaseId: value.id, name: value.value_name, priceAdjustment: 0, recipeChanges: [],
+            id: `value-${value.id}`, databaseId: value.id, name: value.value_name, priceAdjustment: Number(value.price_adjustment || 0), recipeChanges: [],
           })),
         }));
         const variants = (variantData || []).filter((variant) => variant.production_sku_id === item.id).map((variant) => {
