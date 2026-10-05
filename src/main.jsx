@@ -544,7 +544,7 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, rel
         if (found.qty >= product.stock) return current;
         return current.map((x) => x === found ? { ...x, qty: Math.min(x.qty + addQty, product.stock) } : x);
       }
-      return [...current, { ...product, id: `${product.id}-${signature}`, productId: product.id, basePrice: Number(product.price), price: finalPrice, selections: selected, selectedOptions, qty: Math.min(addQty, product.stock) }];
+      return [...current, { ...product, id: `${product.id}-${signature}`, productId: product.id, basePrice: Number(product.price), price: finalPrice, selections: selected, selectedOptions, qty: addQty }];
     });
     setSelectionProduct(null);
     setSelections({});
@@ -2428,10 +2428,10 @@ function PublicOrderPage() {
     if(!variant) return alert("Please select an available product option.");
     const selectedOptions=(product.optionGroups||[]).flatMap((group)=>{const option=group.options?.find((x)=>x.id===selected[group.id]);return option?[{groupId:group.id,groupName:group.name,optionId:option.id,optionName:option.name}]:[];});
     const key=`${product.id}-${variant.id}`;
-    setCart((current)=>{const found=current.find((x)=>x.id===key);const addQty=Math.min(Math.max(1,Number(quantity||1)),variant.stock);if(found)return current.map((x)=>x.id===key?{...x,qty:Math.min(x.qty+addQty,variant.stock)}:x);return [...current,{...product,id:key,productId:product.id,variantId:variant.id,price:variant.price,stock:variant.stock,selectedOptions,qty:addQty}];});
+    setCart((current)=>{const found=current.find((x)=>x.id===key);const addQty=Math.max(1,Number(quantity||1));if(found)return current.map((x)=>x.id===key?{...x,qty:x.qty+addQty}:x);return [...current,{...product,id:key,productId:product.id,variantId:variant.id,price:variant.price,stock:variant.stock,selectedOptions,qty:addQty}];});
     setSelectionProduct(null); setSelections({});
   }
-  function adjust(id,delta){setCart((current)=>current.map((x)=>x.id===id?{...x,qty:Math.max(0,Math.min(x.qty+delta,x.stock))}:x).filter((x)=>x.qty>0));}
+  function adjust(id,delta){setCart((current)=>current.map((x)=>x.id===id?{...x,qty:Math.max(0,x.qty+delta)}:x).filter((x)=>x.qty>0));}
   const subtotal=cart.reduce((s,x)=>s+x.price*x.qty,0);
   const taxableSubtotal=cart.reduce((s,x)=>s+(x.taxApplicable!==false?x.price*x.qty:0),0);
   const tax=taxableSubtotal*0.06,total=subtotal+tax;
@@ -2488,12 +2488,12 @@ function PublicOrderPage() {
     <div className="public-order-header"><div><strong>HanaAzz Enterprise</strong><span>Customer Order</span></div><span className="system-status"><span className="status-dot"/> Online</span></div>
     {loading ? <div className="public-loading">Loading menu...</div> : <div className="pos-layout public-pos">
       <section className="product-zone"><div className="toolbar"><div className="search-box"><Search size={18}/><input value={query} onChange={(e)=>setQuery(e.target.value)} placeholder="Search product..."/></div><div className="category-strip">{categories.map((x)=><button key={x} className={category===x?"selected":""} onClick={()=>setCategory(x)}>{x}</button>)}</div></div>
-      <div className="product-grid">{filtered.map((p)=><button key={p.id} className={`product-card ${p.stock===0?"disabled":""}`} disabled={p.stock===0} onClick={()=>openProduct(p)}><span className="product-category">{p.category}</span><strong>{p.name}</strong><span className="sku">{p.sku}</span><div className="product-bottom"><b>{money(p.price)}</b><span>{p.stock} left</span></div></button>)}</div></section>
+      <div className="product-grid">{filtered.map((p)=><button key={p.id} className="product-card" onClick={()=>openProduct(p)}><span className="product-category">{p.category}</span><strong>{p.name}</strong><span className="sku">{p.sku}</span><div className="product-bottom"><b>{money(p.price)}</b></div></button>)}</div></section>
       <aside className="cart-panel"><div className="section-head"><div><p className="eyebrow">YOUR ORDER</p><h3>Order Summary</h3></div><span className="cart-count">{cart.reduce((a,x)=>a+x.qty,0)}</span></div>
       <div className="customer-info-box"><div className="customer-info-title"><strong>Customer Info</strong><span>Required</span></div><div className="customer-info-grid"><label>Name *<input required value={customerName} onChange={(e)=>setCustomerName(e.target.value)} placeholder="Your name"/></label><label>Telephone No. *<input required value={customerTelephone} onChange={(e)=>setCustomerTelephone(e.target.value)} placeholder="e.g. 0123456789"/></label></div></div>
       <div className="cart-items">{!cart.length&&<div className="empty-state"><ShoppingCart size={30}/><strong>No items yet</strong><span>Select an item to start your order.</span></div>}{cart.map((x)=><div className="cart-item" key={x.id}><div className="grow"><strong>{x.name}</strong>{x.selectedOptions?.length>0&&<span>{x.selectedOptions.map((o)=>`${o.groupName}: ${o.optionName}`).join(" • ")}</span>}<span>{money(x.price)} each</span></div><div className="qty"><button onClick={()=>adjust(x.id,-1)}><Minus size={15}/></button><span>{x.qty}</span><button onClick={()=>adjust(x.id,1)}><Plus size={15}/></button></div><strong>{money(x.price*x.qty)}</strong></div>)}</div>
       <div className="bill"><div><span>Subtotal</span><strong>{money(subtotal)}</strong></div><div><span>Tax 6%</span><strong>{money(tax)}</strong></div><div className="total"><span>Total</span><strong>{money(total)}</strong></div><button className="primary-btn full" disabled={!cart.length||!customerName.trim()||!customerTelephone.trim()||submitting} onClick={placeOrder}>{submitting?"Submitting...":`Place Order • ${money(total)}`}</button><small className="muted">Payment will be made at the counter.</small></div></aside>
-      {selectionProduct&&<OptionSelectionModal product={selectionProduct} selections={selections} setSelections={setSelections} quantity={selectionQuantity} setQuantity={setSelectionQuantity} maxQuantity={selectionProduct.stock||null} onCancel={()=>setSelectionProduct(null)} onConfirm={(price)=>addConfigured(selectionProduct,selections,price,selectionQuantity)} actionLabel="Add to Order"/>}
+      {selectionProduct&&<OptionSelectionModal product={selectionProduct} selections={selections} setSelections={setSelections} quantity={selectionQuantity} setQuantity={setSelectionQuantity} onCancel={()=>setSelectionProduct(null)} onConfirm={(price)=>addConfigured(selectionProduct,selections,price,selectionQuantity)} actionLabel="Add to Order"/>}
     </div>}</div>;
 }
 
