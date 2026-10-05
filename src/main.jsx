@@ -533,39 +533,68 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, rel
   function addConfigured(product, selected, finalPrice, quantity = 1) {
     const selectedOptions = (product.optionGroups || []).flatMap((group) => {
       const option = group.options?.find((item) => item.id === selected[group.id]);
-      return option ? [{ groupId: group.id, groupName: group.name, optionId: option.id, optionName: option.name, priceAdjustment: Number(option.priceAdjustment || 0) }] : [];
+      return option ? [{
+        groupId: group.id,
+        groupName: group.name,
+        optionId: option.id,
+        optionName: option.name,
+        databaseTypeId: group.databaseId ?? null,
+        databaseValueId: option.databaseId ?? null,
+        priceAdjustment: Number(option.priceAdjustment || 0),
+      }] : [];
     });
-    const selectedValueIds = Object.values(selected || {}).filter(Boolean);
-    const selectedDatabaseValueIds = selectedOptions.map((option) => {
-      const group = (product.optionGroups || []).find((g) => g.id === option.groupId);
-      const value = group?.options?.find((x) => x.id === option.optionId);
-      return value?.databaseId != null ? String(value.databaseId) : null;
-    }).filter(Boolean);
+
+    // Resolve the database variant at the moment the cashier selects the option.
+    // Database IDs are stable across refresh/logout; React option IDs are not used as the source of truth.
+    const selectedDbIds = selectedOptions
+      .map((option) => option.databaseValueId)
+      .filter((id) => id != null)
+      .map(String)
+      .sort();
+
     let selectedVariant = (product.variants || []).find((variant) => {
-      const variantValueIds = Object.values(variant.selections || {}).filter(Boolean);
-      return selectedValueIds.length === variantValueIds.length && selectedValueIds.every((id) => variantValueIds.includes(id));
+      const variantDbIds = Object.values(variant.selections || {})
+        .filter(Boolean)
+        .map((id) => String(id).replace(/^value-/, ""))
+        .sort();
+      return selectedDbIds.length > 0 &&
+        selectedDbIds.length === variantDbIds.length &&
+        selectedDbIds.every((id, index) => id === variantDbIds[index]);
     });
-    if (!selectedVariant && selectedDatabaseValueIds.length) {
-      selectedVariant = (product.variants || []).find((variant) => {
-        const variantDatabaseValueIds = Object.values(variant.selections || {})
-          .filter(Boolean)
-          .map((id) => String(id).replace("value-", ""));
-        return selectedDatabaseValueIds.length === variantDatabaseValueIds.length &&
-          selectedDatabaseValueIds.every((id) => variantDatabaseValueIds.includes(id));
-      });
-    }
+
     if (!selectedVariant && selectedOptions.length === 1) {
-      selectedVariant = (product.variants || []).find((variant) => String(variant.name || "").trim().toLowerCase() === String(selectedOptions[0].optionName || "").trim().toLowerCase());
+      selectedVariant = (product.variants || []).find(
+        (variant) => String(variant.name || "").trim().toLowerCase() ===
+          String(selectedOptions[0].optionName || "").trim().toLowerCase()
+      );
     }
-    if (!selectedVariant && !(product.optionGroups || []).length && (product.variants || []).length === 1) selectedVariant = product.variants[0];
-    const signature = JSON.stringify(selected);
+    if (!selectedVariant && !(product.optionGroups || []).length && (product.variants || []).length === 1) {
+      selectedVariant = product.variants[0];
+    }
+    if (!selectedVariant) {
+      alert("No Product Variant matches the selected options.");
+      return;
+    }
+
+    const signature = `${product.id}:${selectedVariant.id}`;
     setCart((current) => {
-      const found = current.find((x) => x.id === product.id && JSON.stringify(x.selections || {}) === signature);
+      const found = current.find((x) => x.cartSignature === signature);
       const addQty = Math.max(1, Number(quantity || 1));
       if (found) {
         return current.map((x) => x === found ? { ...x, qty: x.qty + addQty } : x);
       }
-      return [...current, { ...product, id: `${product.id}-${signature}`, productId: product.id, variantId: selectedVariant?.id || null, basePrice: Number(product.price), price: selectedVariant?.price ?? finalPrice, selections: selected, selectedOptions, qty: addQty }];
+      return [...current, {
+        ...product,
+        id: `${product.id}-variant-${selectedVariant.id}`,
+        cartSignature: signature,
+        productId: product.id,
+        variantId: selectedVariant.id,
+        basePrice: Number(product.price),
+        price: Number(selectedVariant.price ?? finalPrice),
+        selections: selected,
+        selectedOptions,
+        qty: addQty,
+      }];
     });
     setSelectionProduct(null);
     setSelections({});
@@ -590,13 +619,12 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, rel
     try {
       const rpcItems = cart.map((item) => {
         const product = products.find((p) => p.id === item.productId);
-        let variant = (product?.variants || []).find((v) => String(v.id) === String(item.variantId));
-        if (!variant && (item.selectedOptions || []).length) {
-          const optionNames = (item.selectedOptions || []).map((o) => String(o.optionName || "").trim().toLowerCase());
-          variant = (product?.variants || []).find((v) => optionNames.length === 1 && String(v.name || "").trim().toLowerCase() === optionNames[0]);
+        const variantId = Number(item.variantId);
+        if (!Number.isInteger(variantId) || variantId <= 0) {
+          throw new Error("No Product Variant matches the selected options.");
         }
-        if (!variant && (product?.variants || []).length === 1) variant = product.variants[0];
-        if (!variant) throw new Error("No Product Variant matches the selected options.");
+        const variant = (product?.variants || []).find((v) => Number(v.id) === variantId);
+        if (!variant) throw new Error("Selected Product Variant is no longer available. Please remove the item and select it again.");
         return {
           product_variant_id: variant.id,
           quantity: item.qty,
