@@ -2037,17 +2037,26 @@ async function recordProduction(product, selected = {}) {
       }
     }
 
-    // 3. Update each existing variant selling price
+    // 3. Keep each database variant selling price aligned with the base price
+    // plus the price-impact adjustments of its selected option values.
     for (const variant of productForm.variants || []) {
+      const adjustment = Object.entries(variant.selections || {}).reduce((total, [groupId, optionId]) => {
+        const group = (normalized.optionGroups || []).find((g) => g.id === groupId);
+        if (!group || group.priceImpact === false) return total;
+        const option = (group.options || []).find((o) => o.id === optionId);
+        return total + Number(option?.priceAdjustment || 0);
+      }, 0);
+      const sellingPrice = Number(normalized.price || 0) + adjustment;
       const { error: variantError } = await supabase
         .from("product_variant")
         .update({
-          selling_price: Number(variant.price || 0),
+          selling_price: sellingPrice,
           updated_at: new Date().toISOString(),
         })
         .eq("id", variant.id);
 
       if (variantError) throw variantError;
+      variant.price = sellingPrice;
     }
 
     // 4. Update React state
