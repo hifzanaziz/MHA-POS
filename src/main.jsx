@@ -1961,7 +1961,30 @@ async function recordProduction(product, selected = {}) {
 
     if (productError) throw productError;
 
-    // 2. Update each existing variant selling price
+    // 2. Persist existing selling-option setup. Previously these edits only lived in React state
+    // and disappeared after logout/refresh.
+    for (const group of normalized.optionGroups || []) {
+      if (group.databaseId) {
+        const { error: groupError } = await supabase
+          .from("variation_type")
+          .update({ type_name: String(group.name || "").trim() })
+          .eq("id", group.databaseId)
+          .eq("production_sku_id", selectedProduct.id);
+        if (groupError) throw groupError;
+      }
+
+      for (const option of group.options || []) {
+        if (option.databaseId) {
+          const { error: optionError } = await supabase
+            .from("variation_value")
+            .update({ value_name: String(option.name || "").trim() })
+            .eq("id", option.databaseId);
+          if (optionError) throw optionError;
+        }
+      }
+    }
+
+    // 3. Update each existing variant selling price
     for (const variant of productForm.variants || []) {
       const { error: variantError } = await supabase
         .from("product_variant")
@@ -1974,7 +1997,7 @@ async function recordProduction(product, selected = {}) {
       if (variantError) throw variantError;
     }
 
-    // 3. Update React state
+    // 4. Update React state
     setProducts((current) =>
       current.map((p) =>
         p.id === selectedProduct.id
