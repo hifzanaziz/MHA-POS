@@ -503,6 +503,11 @@ function OptionSelectionModal({ product, selections, setSelections, onCancel, on
   );
 }
 
+function productImageUrl(imagePath) {
+  if (!imagePath) return "";
+  return supabase.storage.from("product-images").getPublicUrl(imagePath).data.publicUrl;
+}
+
 function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, reloadOrders }) {
   const [cart, setCart] = useState([]);
   const [query, setQuery] = useState("");
@@ -663,6 +668,7 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, rel
         <div className="toolbar"><div className="search-box"><Search size={18} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search product or SKU..." /></div><div className="category-strip">{categories.map((c) => <button key={c} className={category === c ? "selected" : ""} onClick={() => setCategory(c)}>{c}</button>)}</div></div>
         <div className="product-grid">
           {filtered.map((p) => <button key={p.id} className="product-card" onClick={() => openProduct(p)}>
+            <div className="product-card-image">{p.imagePath ? <img src={productImageUrl(p.imagePath)} alt={p.name} loading="lazy" /> : <div className="product-image-placeholder"><UtensilsCrossed size={28} /><span>No Image</span></div>}</div>
             <span className="product-category">{p.category}</span><strong>{p.name}</strong><span className="sku">{p.sku}</span>
             <div className="product-bottom"><b>{money(p.price)}</b><span>{p.optionGroups?.length ? "Options" : `${p.stock} left`}</span></div>
           </button>)}
@@ -2600,7 +2606,7 @@ function PublicOrderPage() {
     <div className="public-order-header"><div><strong>HanaAzz Enterprise</strong><span>Customer Order</span></div><span className="system-status"><span className="status-dot"/> Online</span></div>
     {loading ? <div className="public-loading">Loading menu...</div> : <div className="pos-layout public-pos">
       <section className="product-zone"><div className="toolbar"><div className="search-box"><Search size={18}/><input value={query} onChange={(e)=>setQuery(e.target.value)} placeholder="Search product..."/></div><div className="category-strip">{categories.map((x)=><button key={x} className={category===x?"selected":""} onClick={()=>setCategory(x)}>{x}</button>)}</div></div>
-      <div className="product-grid">{filtered.map((p)=><button key={p.id} className="product-card" onClick={()=>openProduct(p)}><span className="product-category">{p.category}</span><strong>{p.name}</strong><span className="sku">{p.sku}</span><div className="product-bottom"><b>{money(p.price)}</b></div></button>)}</div></section>
+      <div className="product-grid">{filtered.map((p)=><button key={p.id} className="product-card" onClick={()=>openProduct(p)}><div className="product-card-image">{p.imagePath?<img src={productImageUrl(p.imagePath)} alt={p.name} loading="lazy"/>:<div className="product-image-placeholder"><UtensilsCrossed size={28}/><span>No Image</span></div>}</div><span className="product-category">{p.category}</span><strong>{p.name}</strong><span className="sku">{p.sku}</span><div className="product-bottom"><b>{money(p.price)}</b></div></button>)}</div></section>
       <aside className="cart-panel"><div className="section-head"><div><p className="eyebrow">YOUR ORDER</p><h3>Order Summary</h3></div><span className="cart-count">{cart.reduce((a,x)=>a+x.qty,0)}</span></div>
       <div className="customer-info-box"><div className="customer-info-title"><strong>Customer Info</strong><span>Required</span></div><div className="customer-info-grid"><label>Name *<input required value={customerName} onChange={(e)=>setCustomerName(e.target.value)} placeholder="Your name"/></label><label>Telephone No. *<input required value={customerTelephone} onChange={(e)=>setCustomerTelephone(e.target.value)} placeholder="e.g. 0123456789"/></label></div></div>
       <div className="cart-items">{!cart.length&&<div className="empty-state"><ShoppingCart size={30}/><strong>No items yet</strong><span>Select an item to start your order.</span></div>}{cart.map((x)=><div className="cart-item" key={x.id}><div className="grow"><strong>{x.name}</strong>{x.selectedOptions?.length>0&&<span>{x.selectedOptions.map((o)=>`${o.groupName}: ${o.optionName}`).join(" • ")}</span>}<span>{money(x.price)} each</span></div><div className="qty"><button onClick={()=>adjust(x.id,-1)}><Minus size={15}/></button><span>{x.qty}</span><button onClick={()=>adjust(x.id,1)}><Plus size={15}/></button></div><strong>{money(x.price*x.qty)}</strong></div>)}</div>
