@@ -522,7 +522,6 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, rel
   });
 
   function openProduct(product) {
-    if (product.stock <= 0) return;
     if (!(product.optionGroups || []).length) return addConfigured(product, {}, Number(product.price));
     setSelectionProduct(product);
     setSelectionQuantity(1);
