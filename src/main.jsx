@@ -618,21 +618,19 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, rel
     if (!cart.length) return;
     try {
       const rpcItems = cart.map((item) => {
-        const product = products.find((p) => p.id === item.productId);
         const variantId = Number(item.variantId);
         if (!Number.isInteger(variantId) || variantId <= 0) {
           throw new Error("No Product Variant matches the selected options.");
         }
-        const variant = (product?.variants || []).find((v) => Number(v.id) === variantId);
-        if (!variant) throw new Error("Selected Product Variant is no longer available. Please remove the item and select it again.");
         return {
-          product_variant_id: variant.id,
+          product_variant_id: variantId,
           quantity: item.qty,
-          options: (item.selectedOptions || []).map((option) => {
-            const group = (product.optionGroups || []).find((g) => g.id === option.groupId);
-            const value = group?.options?.find((x) => x.id === option.optionId);
-            return { variation_type_id: group?.databaseId || null, variation_value_id: value?.databaseId || null, group_name: option.groupName, value_name: option.optionName };
-          }),
+          options: (item.selectedOptions || []).map((option) => ({
+            variation_type_id: option.databaseTypeId || null,
+            variation_value_id: option.databaseValueId || null,
+            group_name: option.groupName,
+            value_name: option.optionName,
+          })),
         };
       });
       const { data: orderId, error } = await supabase.rpc("create_sales_order", {
