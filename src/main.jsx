@@ -1527,7 +1527,7 @@ function Production({ products, setProducts, recipes, configOptions = [] }) {
   const [modal, setModal] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [formError, setFormError] = useState("");
-  const [productForm, setProductForm] = useState({ sku: "", name: "", category: "", price: "", minimum: 0, taxApplicable: true, optionGroups: [] });
+  const [productForm, setProductForm] = useState({ sku: "", name: "", category: "", price: "", minimum: 0, taxApplicable: true, imagePath: "", imageFile: null, optionGroups: [] });
   const [productionSelectionProduct, setProductionSelectionProduct] = useState(null);
   const [productionSelections, setProductionSelections] = useState({});
 
@@ -1704,7 +1704,7 @@ if (variantStockError) throw variantStockError;
         name: item.sku_name,
         category: item.category || "",
 
-        price: Number(item.base_price || 0), taxApplicable: item.tax_applicable !== false,
+        price: Number(item.base_price || 0), taxApplicable: item.tax_applicable !== false, imagePath: item.image_path || "",
 
         stock: totalRemaining,
         minimum: 0,
@@ -1943,6 +1943,8 @@ async function recordProduction(product, selected = {}) {
     price: product.price,
     minimum: product.minimum ?? 0,
     taxApplicable: product.taxApplicable !== false,
+    imagePath: product.imagePath || "",
+    imageFile: null,
 
     optionGroups: (product.optionGroups || []).map((g) => ({
       ...g,
@@ -1978,10 +1980,19 @@ async function recordProduction(product, selected = {}) {
       price: Number(productForm.price),
       minimum: Number(productForm.minimum || 0),
       taxApplicable: productForm.taxApplicable !== false,
+      imagePath: productForm.imagePath || "",
+      imageFile: productForm.imageFile || null,
       optionGroups: productForm.optionGroups || [],
     };
     if (selectedProduct) {
   try {
+    let savedImagePath = normalized.imagePath || "";
+    if (normalized.imageFile) {
+      const extension = (normalized.imageFile.name.split(".").pop() || "webp").toLowerCase();
+      savedImagePath = `${normalized.sku}/main.${extension}`;
+      const { error: uploadError } = await supabase.storage.from("product-images").upload(savedImagePath, normalized.imageFile, { upsert: true, contentType: normalized.imageFile.type });
+      if (uploadError) throw uploadError;
+    }
     const { data: setupCheck, error: setupCheckError } = await supabase.rpc("validate_product_variant_setup", {
       p_production_sku_id: selectedProduct.id,
     });
@@ -2001,6 +2012,7 @@ async function recordProduction(product, selected = {}) {
         category: normalized.category,
         base_price: normalized.price,
         tax_applicable: normalized.taxApplicable,
+        image_path: savedImagePath || null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", selectedProduct.id);
@@ -2067,6 +2079,8 @@ async function recordProduction(product, selected = {}) {
           ? {
               ...p,
               ...normalized,
+              imagePath: savedImagePath,
+              imageFile: null,
 
               variants: (productForm.variants || []).map(
                 (variant) => ({
@@ -2276,7 +2290,7 @@ async function recordProduction(product, selected = {}) {
             {modal === "product" && (
               <form className="sku-form" onSubmit={saveProduct}>
                 <label>Product SKU Code<input autoFocus value={productForm.sku} onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })} placeholder="e.g. BUR-002" /></label>
-                <label>Product Name<input value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} placeholder="Product description" /></label>
+                <label>Product Name<input value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} placeholder="Product description" /></label><label>Product Image<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => { const file=e.target.files?.[0]||null; if(file&&file.size>2097152){setFormError("Product image must be 2 MB or smaller.");e.target.value="";return;} setProductForm({...productForm,imageFile:file}); }} />{productForm.imageFile ? <small className="muted">{productForm.imageFile.name}</small> : productForm.imagePath ? <img src={supabase.storage.from("product-images").getPublicUrl(productForm.imagePath).data.publicUrl} alt="Product" style={{width:120,height:120,objectFit:"cover",borderRadius:12,marginTop:8}} /> : <small className="muted">JPG, PNG or WebP. Maximum 2 MB.</small>}</label>
                 <label>Category<select value={productForm.category} onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}><option value="">Select category</option>{configOptions.filter((x) => x.option_type === "PRODUCT_CATEGORY").map((x) => <option key={x.id} value={x.option_value}>{x.option_value}</option>)}</select></label>
                 <label>Selling Price (RM)<input type="number" min="0" step="0.01" value={productForm.price} onChange={(e) => setProductForm({ ...productForm, price: e.target.value })} /></label><label className="inline-check"><input type="checkbox" checked={productForm.taxApplicable !== false} onChange={(e) => setProductForm({ ...productForm, taxApplicable: e.target.checked })} /> Apply 6% Tax</label>
                 <label>Minimum Product Stock<input type="number" min="0" step="1" value={productForm.minimum} onChange={(e) => setProductForm({ ...productForm, minimum: e.target.value })} /></label>
@@ -2507,7 +2521,7 @@ function PublicOrderPage() {
         });
         return { id:v.id, code:v.code, name:v.name || "", price:Number(v.price || 0), stock:Number(v.stock || 0), selections };
       });
-      return { id:p.id, skuType:"product", sku:p.sku, name:p.name, category:p.category || "", price:Number(p.price || 0), taxApplicable:p.tax_applicable !== false, optionGroups, variants:productVariants, stock:productVariants.reduce((s,v)=>s+v.stock,0) };
+      return { id:p.id, skuType:"product", sku:p.sku, name:p.name, category:p.category || "", price:Number(p.price || 0), taxApplicable:p.tax_applicable !== false, imagePath:p.image_path || "", optionGroups, variants:productVariants, stock:productVariants.reduce((s,v)=>s+v.stock,0) };
     }));
     setLoading(false);
   }
