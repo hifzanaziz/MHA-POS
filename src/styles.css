@@ -964,3 +964,13 @@ body {
 .customer-validation-message { margin:10px 0 12px; padding:10px 12px; border-radius:10px; background:#fef2f2; color:#b91c1c; font-size:.82rem; font-weight:700; }
 .customer-info-box .input-error { border-color:#dc2626 !important; background:#fffafa; }
 .field-error { display:block; margin-top:5px; color:#b91c1c; font-size:.75rem; font-weight:600; }
+
+.confirmation-customer{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
+.confirmation-customer>div{display:flex;flex-direction:column;gap:4px;padding:12px;border:1px solid #e5e7eb;border-radius:12px;text-align:left}
+.confirmation-customer span,.confirmation-item span,.receipt-save-box span{font-size:.78rem;color:#6b7280}
+.confirmation-items{margin:14px 0;border:1px solid #e5e7eb;border-radius:12px;padding:4px 14px}
+.confirmation-item{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid #eee;text-align:left}
+.confirmation-item:last-child{border-bottom:0}.confirmation-item>div{display:flex;flex-direction:column;gap:3px}
+.receipt-save-box{display:flex;flex-direction:column;gap:8px;margin:18px 0;padding:15px;border:1px dashed #c4b5fd;border-radius:14px;background:#faf8ff;text-align:left}
+.secondary-btn.full{width:100%}
+@media(max-width:560px){.confirmation-customer{grid-template-columns:1fr}}
