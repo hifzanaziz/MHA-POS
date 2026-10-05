@@ -2497,7 +2497,7 @@ function PublicOrderPage() {
       const productTypes = types.filter((t) => t.production_sku_id === p.id);
       const optionGroups = productTypes.map((t) => ({
         id: `type-${t.id}`, databaseId: t.id, name: t.name, required: t.is_required !== false, priceImpact: t.price_impact !== false, recipeImpact: t.recipe_impact !== false,
-        options: values.filter((v) => v.variation_type_id === t.id).map((v) => ({ id: `value-${v.id}`, databaseId: v.id, name: v.name, priceAdjustment: 0, recipeChanges: [] })),
+        options: values.filter((v) => v.variation_type_id === t.id).map((v) => ({ id: `value-${v.id}`, databaseId: v.id, name: v.name, priceAdjustment: Number(v.price_adjustment || 0), recipeChanges: [] })),
       }));
       const productVariants = variants.filter((v) => v.production_sku_id === p.id).map((v) => {
         const selections = {};
@@ -2531,7 +2531,7 @@ function PublicOrderPage() {
   }
   function adjust(id,delta){setCart((current)=>current.map((x)=>x.id===id?{...x,qty:Math.max(0,x.qty+delta)}:x).filter((x)=>x.qty>0));}
   const subtotal=cart.reduce((s,x)=>s+x.price*x.qty,0);
-  const taxableSubtotal=cart.reduce((s,x)=>s+(x.taxApplicable!==false?x.price*x.qty:0),0);
+  const taxableSubtotal=cart.reduce((s,x)=>s+(x.taxApplicable===true?x.price*x.qty:0),0);
   const tax=taxableSubtotal*0.06,total=subtotal+tax;
 
   async function placeOrder(){
