@@ -53,7 +53,7 @@ import { getNetSalesSummary, getTopProductSales, getTopInventoryUsage, getStockA
 
 const productsSeed = [
   { id: 1, skuType: "product", sku: "KR-SS-001", name: "Samperit Susu", category: "Kuih Raya", price: 20, stock: 24, minimum: 8, produced: 40, sold: 16, optionGroups: [
-    { id: "size", name: "Size", required: type.is_required !== false, priceImpact: type.price_impact !== false, recipeImpact: type.recipe_impact !== false, options: [
+    { id: "size", name: "Size", required: true, priceImpact: true, recipeImpact: true, options: [
       { id: "regular", name: "Regular", priceAdjustment: 0, recipeChanges: [] },
       { id: "large", name: "Large", priceAdjustment: 5, recipeChanges: [{ inventorySkuId: 101, qtyRecipeUom: 50, mode: "add" }] },
     ] },
@@ -2441,7 +2441,7 @@ function PublicOrderPage() {
     setProducts((menu.products || []).map((p) => {
       const productTypes = types.filter((t) => t.production_sku_id === p.id);
       const optionGroups = productTypes.map((t) => ({
-        id: `type-${t.id}`, databaseId: t.id, name: t.name, required: type.is_required !== false, priceImpact: type.price_impact !== false, recipeImpact: type.recipe_impact !== false,
+        id: `type-${t.id}`, databaseId: t.id, name: t.name, required: t.is_required !== false, priceImpact: t.price_impact !== false, recipeImpact: t.recipe_impact !== false,
         options: values.filter((v) => v.variation_type_id === t.id).map((v) => ({ id: `value-${v.id}`, databaseId: v.id, name: v.name, priceAdjustment: 0, recipeChanges: [] })),
       }));
       const productVariants = variants.filter((v) => v.production_sku_id === p.id).map((v) => {
