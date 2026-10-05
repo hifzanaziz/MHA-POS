@@ -2433,7 +2433,6 @@ function PublicOrderPage() {
   const filtered = products.filter((p) => (category === "All" || p.category === category) && (p.name.toLowerCase().includes(query.toLowerCase()) || p.sku.toLowerCase().includes(query.toLowerCase())));
 
   function openProduct(product) {
-    if (product.stock <= 0) return;
     setSelectionProduct(product); setSelectionQuantity(1); setSelections({});
   }
   function addConfigured(product, selected, ignoredPrice, quantity=1) {
