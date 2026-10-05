@@ -2726,7 +2726,7 @@ function App() {
   if (!user) return <Login onLogin={setUser} />;
 
   return (
-    <AppShell user={user} page={page} setPage={setPage} onLogout={() => { setUser(null); setPage("dashboard"); }}>
+    <AppShell user={user} page={page} setPage={setPage} onLogout={async () => { await supabase.auth.signOut(); setProducts([]); setOrders([]); setUser(null); setPage("dashboard"); }}>
       {page === "dashboard" && <Dashboard products={products} orders={orders} recipes={recipes} inventoryUsage={inventoryUsage} onNavigate={setPage} />}
       {page === "order" && <OrderTaking products={products} setProducts={setProducts} orders={orders} setOrders={setOrders} onNavigate={setPage} reloadOrders={loadOrders} />}
       {page === "orderHistory" && <OrderHistory orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} reloadOrders={loadOrders} />}
