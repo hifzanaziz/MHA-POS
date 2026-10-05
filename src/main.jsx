@@ -2475,7 +2475,11 @@ function PublicOrderPage() {
       </body></html>`;
     const win = window.open("", "_blank");
     if (!win) return alert("Please allow pop-ups to save your receipt.");
-    win.document.open(); win.document.write(receipt); win.document.close();\n    win.onload = () => { win.focus(); win.print(); };
+    win.document.open();
+    win.document.write(receipt);
+    win.document.close();
+    win.focus();
+    win.print();
   }
 
   if(confirmation) return <div className="public-order-page"><div className="public-order-header"><div><strong>HanaAzz Enterprise</strong><span>Customer Order</span></div></div><div className="public-confirmation"><PackageCheck size={48}/><p className="eyebrow">ORDER CONFIRMED</p><h1>Thank you!</h1><p>Your order has been sent to the store.</p><div className="public-order-number"><span>Order No.</span><strong>{confirmation.order_no}</strong></div><div className="confirmation-customer"><div><span>Customer</span><strong>{confirmation.customer_name}</strong></div><div><span>Telephone</span><strong>{confirmation.customer_telephone}</strong></div></div><div className="confirmation-items">{(confirmation.items||[]).map((item,index)=><div className="confirmation-item" key={index}><div><strong>{item.name} × {item.qty}</strong>{item.options?.length>0&&<span>{item.options.join(" • ")}</span>}</div><strong>{money(item.lineTotal)}</strong></div>)}</div><div className="bill"><div><span>Subtotal</span><strong>{money(confirmation.subtotal)}</strong></div><div><span>Tax</span><strong>{money(confirmation.tax)}</strong></div><div className="total"><span>Total</span><strong>{money(confirmation.grand_total)}</strong></div><div><span>Payment</span><strong>Pay Later</strong></div><div><span>Status</span><strong>Pending Payment</strong></div></div><p className="muted">Please proceed to the counter for payment.</p><div className="receipt-save-box"><strong>Would you like to save your order receipt?</strong><span>You can save the receipt as a PDF on your phone or computer.</span><button className="primary-btn full" onClick={downloadReceipt}>Download PDF Receipt</button></div><button className="secondary-btn full" onClick={()=>setConfirmation(null)}>Create Another Order</button></div></div>;
