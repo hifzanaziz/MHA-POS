@@ -541,8 +541,7 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, rel
       const found = current.find((x) => x.id === product.id && JSON.stringify(x.selections || {}) === signature);
       const addQty = Math.max(1, Number(quantity || 1));
       if (found) {
-        if (found.qty >= product.stock) return current;
-        return current.map((x) => x === found ? { ...x, qty: Math.min(x.qty + addQty, product.stock) } : x);
+        return current.map((x) => x === found ? { ...x, qty: x.qty + addQty } : x);
       }
       return [...current, { ...product, id: `${product.id}-${signature}`, productId: product.id, basePrice: Number(product.price), price: finalPrice, selections: selected, selectedOptions, qty: addQty }];
     });
@@ -551,10 +550,9 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, rel
   }
 
   function adjust(id, delta) {
-    setCart((current) => current.map((x) => {
-      const p = products.find((p) => p.id === x.productId || p.id === x.id);
-      return x.id === id ? { ...x, qty: Math.max(0, Math.min(x.qty + delta, p?.stock ?? 0)) } : x;
-    }).filter((x) => x.qty > 0));
+    setCart((current) => current.map((x) =>
+      x.id === id ? { ...x, qty: Math.max(0, x.qty + delta) } : x
+    ).filter((x) => x.qty > 0));
   }
 
   const subtotal = cart.reduce((sum, x) => sum + x.price * x.qty, 0);
@@ -571,18 +569,11 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, rel
       const rpcItems = cart.map((item) => {
         const product = products.find((p) => p.id === item.productId);
         const selectedNames = (item.selectedOptions || []).map((option) => String(option.optionName || "").trim().toLowerCase()).filter(Boolean);
-        let variant = (product?.variants || []).find((v) => {
-          const variantNames = Object.values(v.selections || {}).map((selectionId) => {
-            for (const group of product?.optionGroups || []) {
-              const value = group.options?.find((x) => x.id === selectionId);
-              if (value?.name) return String(value.name).trim().toLowerCase();
-            }
-            return "";
-          }).filter(Boolean);
-          return selectedNames.length > 0 && selectedNames.every((name) => variantNames.includes(name));
-        });
-        if (!variant && selectedNames.length === 1) {
-          variant = (product?.variants || []).find((v) => String(v.name || "").trim().toLowerCase() === selectedNames[0]);
+        let variant;
+        if (selectedNames.length === 0 && (product?.variants || []).length === 1) {
+          variant = product.variants[0];
+        } else {
+          variant = (product?.variants || []).find((v) => selectedNames.includes(String(v.name || "").trim().toLowerCase()));
         }
         if (!variant) throw new Error("No Product Variant matches the selected options.");
         return {
@@ -623,7 +614,7 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, rel
       <section className="product-zone">
         <div className="toolbar"><div className="search-box"><Search size={18} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search product or SKU..." /></div><div className="category-strip">{categories.map((c) => <button key={c} className={category === c ? "selected" : ""} onClick={() => setCategory(c)}>{c}</button>)}</div></div>
         <div className="product-grid">
-          {filtered.map((p) => <button key={p.id} className={`product-card ${p.stock === 0 ? "disabled" : ""}`} onClick={() => openProduct(p)} disabled={p.stock === 0}>
+          {filtered.map((p) => <button key={p.id} className="product-card" onClick={() => openProduct(p)}>
             <span className="product-category">{p.category}</span><strong>{p.name}</strong><span className="sku">{p.sku}</span>
             <div className="product-bottom"><b>{money(p.price)}</b><span>{p.optionGroups?.length ? "Options" : `${p.stock} left`}</span></div>
           </button>)}
@@ -637,7 +628,7 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, rel
         </div>
         <div className="bill"><div><span>Subtotal</span><strong>{money(subtotal)}</strong></div><div><span>Tax 6%</span><strong>{money(tax)}</strong></div><div className="total"><span>Total</span><strong>{money(total)}</strong></div><button className="primary-btn full" disabled={!cart.length} onClick={() => submitOrder("Completed")}>Pay {money(total)}</button><button className="secondary-btn full pay-later-btn" disabled={!cart.length} onClick={() => submitOrder("Pending")}><History size={17} /> Pay Later</button><button className="text-btn full" type="button" onClick={() => onNavigate("orderHistory")}>View Order History <ChevronRight size={16} /></button></div>
       </aside>
-      {selectionProduct && <OptionSelectionModal product={selectionProduct} selections={selections} setSelections={setSelections} quantity={selectionQuantity} setQuantity={setSelectionQuantity} maxQuantity={selectionProduct?.stock || null} onCancel={() => { setSelectionProduct(null); setSelectionQuantity(1); }} onConfirm={(price) => addConfigured(selectionProduct, selections, price, selectionQuantity)} />}
+      {selectionProduct && <OptionSelectionModal product={selectionProduct} selections={selections} setSelections={setSelections} quantity={selectionQuantity} setQuantity={setSelectionQuantity} onCancel={() => { setSelectionProduct(null); setSelectionQuantity(1); }} onConfirm={(price) => addConfigured(selectionProduct, selections, price, selectionQuantity)} />}
     </div>
   );
 }
