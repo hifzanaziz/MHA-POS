@@ -536,6 +536,15 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, rel
       const option = group.options?.find((item) => item.id === selected[group.id]);
       return option ? [{ groupId: group.id, groupName: group.name, optionId: option.id, optionName: option.name, priceAdjustment: Number(option.priceAdjustment || 0) }] : [];
     });
+    const selectedValueIds = Object.values(selected || {}).filter(Boolean);
+    let selectedVariant = (product.variants || []).find((variant) => {
+      const variantValueIds = Object.values(variant.selections || {}).filter(Boolean);
+      return selectedValueIds.length === variantValueIds.length && selectedValueIds.every((id) => variantValueIds.includes(id));
+    });
+    if (!selectedVariant && selectedOptions.length === 1) {
+      selectedVariant = (product.variants || []).find((variant) => String(variant.name || "").trim().toLowerCase() === String(selectedOptions[0].optionName || "").trim().toLowerCase());
+    }
+    if (!selectedVariant && !(product.optionGroups || []).length && (product.variants || []).length === 1) selectedVariant = product.variants[0];
     const signature = JSON.stringify(selected);
     setCart((current) => {
       const found = current.find((x) => x.id === product.id && JSON.stringify(x.selections || {}) === signature);
@@ -543,7 +552,7 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, rel
       if (found) {
         return current.map((x) => x === found ? { ...x, qty: x.qty + addQty } : x);
       }
-      return [...current, { ...product, id: `${product.id}-${signature}`, productId: product.id, basePrice: Number(product.price), price: finalPrice, selections: selected, selectedOptions, qty: addQty }];
+      return [...current, { ...product, id: `${product.id}-${signature}`, productId: product.id, variantId: selectedVariant?.id || null, basePrice: Number(product.price), price: selectedVariant?.price ?? finalPrice, selections: selected, selectedOptions, qty: addQty }];
     });
     setSelectionProduct(null);
     setSelections({});
@@ -568,13 +577,7 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, rel
     try {
       const rpcItems = cart.map((item) => {
         const product = products.find((p) => p.id === item.productId);
-        const selectedNames = (item.selectedOptions || []).map((option) => String(option.optionName || "").trim().toLowerCase()).filter(Boolean);
-        let variant;
-        if (selectedNames.length === 0 && (product?.variants || []).length === 1) {
-          variant = product.variants[0];
-        } else {
-          variant = (product?.variants || []).find((v) => selectedNames.includes(String(v.name || "").trim().toLowerCase()));
-        }
+        const variant = (product?.variants || []).find((v) => v.id === item.variantId) || ((product?.variants || []).length === 1 ? product.variants[0] : null);
         if (!variant) throw new Error("No Product Variant matches the selected options.");
         return {
           product_variant_id: variant.id,
