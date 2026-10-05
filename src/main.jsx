@@ -2496,3 +2496,207 @@ function PublicOrderPage() {
       {selectionProduct&&<OptionSelectionModal product={selectionProduct} selections={selections} setSelections={setSelections} quantity={selectionQuantity} setQuantity={setSelectionQuantity} maxQuantity={selectionProduct.stock||null} onCancel={()=>setSelectionProduct(null)} onConfirm={(price)=>addConfigured(selectionProduct,selections,price,selectionQuantity)} actionLabel="Add to Order"/>}
     </div>}</div>;
 }
+
+function App() {
+  const isPublicOrder = window.location.pathname === "/order" || window.location.pathname === "/customer-order";
+  const [user, setUser] = useState(null);
+  const [page, setPage] = useState("dashboard");
+  const [products, setProducts] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [inventoryUsage, setInventoryUsage] = useState([]);
+  const [configOptions, setConfigOptions] = useState([]);
+  const [recipes, setRecipes] = useState({
+    1: [
+      { inventorySkuId: 101, qtyRecipeUom: 200 },
+      { inventorySkuId: 102, qtyRecipeUom: 80 },
+      { inventorySkuId: 103, qtyRecipeUom: 50 },
+      { inventorySkuId: 106, qtyRecipeUom: 1 },
+    ],
+    2: [
+      { inventorySkuId: 101, qtyRecipeUom: 180 },
+      { inventorySkuId: 102, qtyRecipeUom: 70 },
+      { inventorySkuId: 103, qtyRecipeUom: 60 },
+      { inventorySkuId: 106, qtyRecipeUom: 1 },
+    ],
+    3: [
+      { inventorySkuId: 101, qtyRecipeUom: 220 },
+      { inventorySkuId: 102, qtyRecipeUom: 50 },
+      { inventorySkuId: 103, qtyRecipeUom: 30 },
+      { inventorySkuId: 106, qtyRecipeUom: 1 },
+    ],
+    4: [
+      { inventorySkuId: 101, qtyRecipeUom: 180 },
+      { inventorySkuId: 102, qtyRecipeUom: 70 },
+      { inventorySkuId: 103, qtyRecipeUom: 40 },
+      { inventorySkuId: 106, qtyRecipeUom: 1 },
+    ],
+    5: [
+      { inventorySkuId: 101, qtyRecipeUom: 220 },
+      { inventorySkuId: 102, qtyRecipeUom: 60 },
+      { inventorySkuId: 103, qtyRecipeUom: 30 },
+      { inventorySkuId: 106, qtyRecipeUom: 1 },
+    ],
+    6: [
+      { inventorySkuId: 101, qtyRecipeUom: 180 },
+      { inventorySkuId: 104, qtyRecipeUom: 5 },
+      { inventorySkuId: 105, qtyRecipeUom: 2 },
+      { inventorySkuId: 106, qtyRecipeUom: 1 },
+    ],
+    7: [
+      { inventorySkuId: 101, qtyRecipeUom: 150 },
+      { inventorySkuId: 104, qtyRecipeUom: 4 },
+      { inventorySkuId: 105, qtyRecipeUom: 1 },
+      { inventorySkuId: 106, qtyRecipeUom: 1 },
+    ],
+    8: [
+      { inventorySkuId: 101, qtyRecipeUom: 160 },
+      { inventorySkuId: 104, qtyRecipeUom: 4 },
+      { inventorySkuId: 106, qtyRecipeUom: 1 },
+    ],
+  });
+
+  async function loadMasterData() {
+    try {
+      const [
+        { data: inventoryData, error: inventoryError },
+        { data: productData, error: productError },
+        { data: typeData, error: typeError },
+        { data: valueData, error: valueError },
+        { data: variantData, error: variantError },
+        { data: variantValueData, error: variantValueError },
+        { data: productionEntryData, error: productionEntryError },
+        { data: variantStockData, error: variantStockError },
+      ] = await Promise.all([
+        supabase.from("inventory_sku").select("*").eq("is_active", true).order("sku_code"),
+        supabase.from("production_sku").select("*").eq("is_active", true).order("sku_code"),
+        supabase.from("variation_type").select("*").order("id"),
+        supabase.from("variation_value").select("*").order("id"),
+        supabase.from("product_variant").select("*").eq("is_active", true).order("id"),
+        supabase.from("product_variant_value").select("*"),
+        supabase.from("production_entry").select("production_sku_id, product_variant_id, production_quantity"),
+        supabase.from("product_variant_stock").select("product_variant_id, current_stock, minimum_stock"),
+      ]);
+      const error = inventoryError || productError || typeError || valueError || variantError || variantValueError || productionEntryError || variantStockError;
+      if (error) throw error;
+
+      const inventory = (inventoryData || []).map((item) => ({
+        id: item.id, skuType: "inventory", sku: item.sku_code, name: item.sku_name, category: item.category || "",
+        price: Number(item.price || 0),
+        stock: Number(item.inventory_to_recipe || 1) > 0 ? Number(item.current_stock || 0) / Number(item.inventory_to_recipe || 1) : 0,
+        minimum: Number(item.inventory_to_recipe || 1) > 0 ? Number(item.minimum_stock ?? item.low_stock_level ?? 0) / Number(item.inventory_to_recipe || 1) : 0,
+        orderUom: item.order_uom || "", inventoryUom: item.inventory_uom || "", recipeUom: item.recipe_uom || "",
+        orderToInventory: Number(item.order_to_inventory || 1), inventoryToRecipe: Number(item.inventory_to_recipe || 1),
+        produced: 0, sold: 0, purchaseHistory: [],
+      }));
+
+      const production = (productData || []).map((item) => {
+        const productTypes = (typeData || []).filter((type) => type.production_sku_id === item.id && type.type_name === "Size");
+        const optionGroups = productTypes.map((type) => ({
+          id: `type-${type.id}`, databaseId: type.id, name: type.type_name, required: true, priceImpact: true, recipeImpact: true,
+          options: (valueData || []).filter((value) => value.variation_type_id === type.id).map((value) => ({
+            id: `value-${value.id}`, databaseId: value.id, name: value.value_name, priceAdjustment: 0, recipeChanges: [],
+          })),
+        }));
+        const variants = (variantData || []).filter((variant) => variant.production_sku_id === item.id).map((variant) => {
+          const linkedValueIds = (variantValueData || []).filter((link) => link.product_variant_id === variant.id).map((link) => link.variation_value_id);
+          const selections = {};
+          productTypes.forEach((type) => {
+            const selectedValue = (valueData || []).find((value) => value.variation_type_id === type.id && linkedValueIds.includes(value.id));
+            if (selectedValue) selections[`type-${type.id}`] = `value-${selectedValue.id}`;
+          });
+          const stockRow = (variantStockData || []).find((row) => row.product_variant_id === variant.id);
+          const produced = (productionEntryData || []).filter((entry) => entry.product_variant_id === variant.id).reduce((sum, entry) => sum + Number(entry.production_quantity || 0), 0);
+          return { id: variant.id, code: variant.variant_code, name: variant.variant_name || "", price: Number(variant.selling_price || 0), produced, stock: Number(stockRow?.current_stock || 0), minimumStock: Number(stockRow?.minimum_stock || 0), selections };
+        });
+        return {
+          id: item.id, skuType: "product", sku: item.sku_code, name: item.sku_name, category: item.category || "", price: Number(item.base_price || 0), taxApplicable: item.tax_applicable !== false,
+          stock: variants.reduce((sum, variant) => sum + Number(variant.stock || 0), 0), minimum: 0,
+          produced: variants.reduce((sum, variant) => sum + Number(variant.produced || 0), 0), sold: 0, optionGroups, variants,
+        };
+      });
+      setProducts([...inventory, ...production]);
+    } catch (error) {
+      console.error("Load master data error:", error);
+    }
+  }
+
+  async function loadConfig() {
+    const { data, error } = await supabase.rpc("get_config_options");
+    if (error) { console.error("Load config error:", error); return; }
+    setConfigOptions(data || []);
+  }
+
+  async function loadOrders() {
+    const { data, error } = await supabase.from("sales_order").select("*, sales_order_item(*, sales_order_item_option(*))").order("created_at", { ascending: false });
+    if (error) { console.error("Load orders error:", error); return; }
+    setOrders((data || []).map((order) => ({
+      id: order.order_no, orderDate: order.created_at, customerName: order.customer_name || "", customerTelephone: order.customer_telephone || "",
+      subtotal: Number(order.subtotal || 0), tax: Number(order.tax_amount || 0), grandTotal: Number(order.grand_total || 0),
+      paymentStatus: order.payment_status, pickupStatus: order.pickup_status,
+      items: (order.sales_order_item || []).map((item) => ({
+        id: item.id, productId: item.production_sku_id, variantId: item.product_variant_id, sku: item.variant_code || item.sku_code,
+        name: item.sku_name, price: Number(item.unit_price || 0), qty: Number(item.quantity || 0), lineTotal: Number(item.line_total || 0),
+        selectedOptions: (item.sales_order_item_option || []).map((option) => ({ groupName: option.option_group_name, optionName: option.option_value_name })),
+      })),
+    })));
+  }
+
+  async function loadInventoryUsage() {
+    const { data, error } = await supabase.rpc("get_inventory_production_usage");
+    if (error) {
+      console.error("Load inventory usage error:", error);
+      setInventoryUsage([]);
+      return;
+    }
+    setInventoryUsage((data || []).map((row) => ({
+      id: row.inventory_sku_id,
+      sku: row.sku_code || "",
+      name: row.sku_name || "Inventory SKU",
+      usage: Number(row.usage || 0),
+      uom: row.recipe_uom || "",
+    })));
+  }
+
+  useEffect(() => { if (user) { loadMasterData(); loadOrders(); loadInventoryUsage(); loadConfig(); } }, [user]);
+
+  useEffect(() => {
+    if (!user || isPublicOrder) return;
+
+    const channel = supabase
+      .channel("staff-sales-order-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "sales_order" },
+        () => {
+          loadOrders();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, isPublicOrder]);
+
+
+  if (isPublicOrder) return <PublicOrderPage />;
+  if (!user) return <Login onLogin={setUser} />;
+
+  return (
+    <AppShell user={user} page={page} setPage={setPage} onLogout={() => { setUser(null); setPage("dashboard"); }}>
+      {page === "dashboard" && <Dashboard products={products} orders={orders} recipes={recipes} inventoryUsage={inventoryUsage} onNavigate={setPage} />}
+      {page === "order" && <OrderTaking products={products} setProducts={setProducts} orders={orders} setOrders={setOrders} onNavigate={setPage} reloadOrders={loadOrders} />}
+      {page === "orderHistory" && <OrderHistory orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} reloadOrders={loadOrders} />}
+      {page === "inventory" && <Inventory products={products} setProducts={setProducts} configOptions={configOptions} />}
+      {page === "recipe" && <RecipeManagement products={products} recipes={recipes} setRecipes={setRecipes} setProducts={setProducts} />}
+      {page === "production" && <Production products={products} setProducts={setProducts} recipes={recipes} configOptions={configOptions} />}
+      {page === "config" && <Config options={configOptions} reloadConfig={loadConfig} />}
+    </AppShell>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
