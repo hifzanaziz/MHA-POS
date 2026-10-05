@@ -1937,6 +1937,16 @@ async function recordProduction(product, selected = {}) {
     };
     if (selectedProduct) {
   try {
+    const { data: setupCheck, error: setupCheckError } = await supabase.rpc("validate_product_variant_setup", {
+      p_production_sku_id: selectedProduct.id,
+    });
+    if (setupCheckError) throw setupCheckError;
+    const setupResult = Array.isArray(setupCheck) ? setupCheck[0] : setupCheck;
+    if (setupResult && setupResult.is_valid === false) {
+      setFormError(setupResult.message || "Variant setup is incomplete. Please re-save the variant configuration.");
+      return;
+    }
+
     // 1. Update main Production SKU
     const { error: productError } = await supabase
       .from("production_sku")
