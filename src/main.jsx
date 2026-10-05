@@ -589,6 +589,7 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, rel
         cartSignature: signature,
         productId: product.id,
         variantId: selectedVariant.id,
+        taxApplicable: product.taxApplicable === true,
         basePrice: Number(product.price),
         price: Number(selectedVariant.price ?? finalPrice),
         selections: selected,
@@ -607,10 +608,10 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, rel
   }
 
   const subtotal = cart.reduce((sum, x) => sum + x.price * x.qty, 0);
-  const taxableSubtotal = cart.reduce((sum, x) => {
-    const product = products.find((p) => p.id === x.productId);
-    return sum + (product?.taxApplicable !== false ? x.price * x.qty : 0);
-  }, 0);
+  const taxableSubtotal = cart.reduce(
+    (sum, x) => sum + (x.taxApplicable === true ? x.price * x.qty : 0),
+    0
+  );
   const tax = taxableSubtotal * 0.06;
   const total = subtotal + tax;
 
