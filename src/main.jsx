@@ -2444,224 +2444,38 @@ function PublicOrderPage() {
     const {data,error}=await supabase.rpc("create_public_sales_order",{p_customer_name:customerName.trim(),p_customer_telephone:customerTelephone.trim(),p_items:items});
     setSubmitting(false);
     if(error) return alert(error.message);
-    setConfirmation(data); setCart([]); setCustomerName(""); setCustomerTelephone(""); await loadMenu();
-  }
-
-  if(confirmation) return <div className="public-order-page"><div className="public-order-header"><div><strong>HanaAzz Enterprise</strong><span>Customer Order</span></div></div><div className="public-confirmation"><PackageCheck size={48}/><p className="eyebrow">ORDER SUBMITTED</p><h1>Thank you!</h1><p>Your order has been sent to the store.</p><div className="public-order-number"><span>Order No.</span><strong>{confirmation.order_no}</strong></div><div className="bill"><div><span>Total</span><strong>{money(confirmation.grand_total)}</strong></div><div><span>Payment</span><strong>Pay Later</strong></div></div><p className="muted">Please proceed to the counter for payment.</p><button className="primary-btn full" onClick={()=>setConfirmation(null)}>Create Another Order</button></div></div>;
-
-  return <div className="public-order-page">
-    <div className="public-order-header"><div><strong>HanaAzz Enterprise</strong><span>Customer Order</span></div><span className="system-status"><span className="status-dot"/> Online</span></div>
-    {loading ? <div className="public-loading">Loading menu...</div> : <div className="pos-layout public-pos">
-      <section className="product-zone"><div className="toolbar"><div className="search-box"><Search size={18}/><input value={query} onChange={(e)=>setQuery(e.target.value)} placeholder="Search product..."/></div><div className="category-strip">{categories.map((x)=><button key={x} className={category===x?"selected":""} onClick={()=>setCategory(x)}>{x}</button>)}</div></div>
-      <div className="product-grid">{filtered.map((p)=><button key={p.id} className={`product-card ${p.stock===0?"disabled":""}`} disabled={p.stock===0} onClick={()=>openProduct(p)}><span className="product-category">{p.category}</span><strong>{p.name}</strong><span className="sku">{p.sku}</span><div className="product-bottom"><b>{money(p.price)}</b><span>{p.stock} left</span></div></button>)}</div></section>
-      <aside className="cart-panel"><div className="section-head"><div><p className="eyebrow">YOUR ORDER</p><h3>Order Summary</h3></div><span className="cart-count">{cart.reduce((a,x)=>a+x.qty,0)}</span></div>
-      <div className={`customer-info-box ${Object.keys(customerErrors).length ? "customer-info-error" : ""}`}><div className="customer-info-title"><strong>Customer Info</strong><span>Required</span></div>{Object.keys(customerErrors).length > 0 && <div className="customer-validation-message">Please complete your customer information before placing the order.</div>}<div className="customer-info-grid"><label>Name *<input className={customerErrors.name ? "input-error" : ""} required value={customerName} onChange={(e)=>{setCustomerName(e.target.value);setCustomerErrors((x)=>({...x,name:""}));}} placeholder="Your name"/>{customerErrors.name && <small className="field-error">{customerErrors.name}</small>}</label><label>Telephone No. *<input className={customerErrors.telephone ? "input-error" : ""} required value={customerTelephone} onChange={(e)=>{setCustomerTelephone(e.target.value);setCustomerErrors((x)=>({...x,telephone:""}));}} placeholder="e.g. 0123456789"/>{customerErrors.telephone && <small className="field-error">{customerErrors.telephone}</small>}</label></div></div>
-      <div className="cart-items">{!cart.length&&<div className="empty-state"><ShoppingCart size={30}/><strong>No items yet</strong><span>Select an item to start your order.</span></div>}{cart.map((x)=><div className="cart-item" key={x.id}><div className="grow"><strong>{x.name}</strong>{x.selectedOptions?.length>0&&<span>{x.selectedOptions.map((o)=>`${o.groupName}: ${o.optionName}`).join(" • ")}</span>}<span>{money(x.price)} each</span></div><div className="qty"><button onClick={()=>adjust(x.id,-1)}><Minus size={15}/></button><span>{x.qty}</span><button onClick={()=>adjust(x.id,1)}><Plus size={15}/></button></div><strong>{money(x.price*x.qty)}</strong></div>)}</div>
-      <div className="bill"><div><span>Subtotal</span><strong>{money(subtotal)}</strong></div><div><span>Tax 6%</span><strong>{money(tax)}</strong></div><div className="total"><span>Total</span><strong>{money(total)}</strong></div><button className="primary-btn full" disabled={!cart.length||submitting} onClick={placeOrder}>{submitting?"Submitting...":`Place Order • ${money(total)}`}</button><small className="muted">Payment will be made at the counter.</small></div></aside>
-      {selectionProduct&&<OptionSelectionModal product={selectionProduct} selections={selections} setSelections={setSelections} quantity={selectionQuantity} setQuantity={setSelectionQuantity} maxQuantity={selectionProduct.stock||null} onCancel={()=>setSelectionProduct(null)} onConfirm={(price)=>addConfigured(selectionProduct,selections,price,selectionQuantity)} actionLabel="Add to Order"/>}
-    </div>}</div>;
-}
-
-function App() {
-  const isPublicOrder = window.location.pathname === "/order" || window.location.pathname === "/customer-order";
-  const [user, setUser] = useState(null);
-  const [page, setPage] = useState("dashboard");
-  const [products, setProducts] = useState([]);
-  const [orders, setOrders] = useState([]);
-  const [inventoryUsage, setInventoryUsage] = useState([]);
-  const [configOptions, setConfigOptions] = useState([]);
-  const [recipes, setRecipes] = useState({
-    1: [
-      { inventorySkuId: 101, qtyRecipeUom: 200 },
-      { inventorySkuId: 102, qtyRecipeUom: 80 },
-      { inventorySkuId: 103, qtyRecipeUom: 50 },
-      { inventorySkuId: 106, qtyRecipeUom: 1 },
-    ],
-    2: [
-      { inventorySkuId: 101, qtyRecipeUom: 180 },
-      { inventorySkuId: 102, qtyRecipeUom: 70 },
-      { inventorySkuId: 103, qtyRecipeUom: 60 },
-      { inventorySkuId: 106, qtyRecipeUom: 1 },
-    ],
-    3: [
-      { inventorySkuId: 101, qtyRecipeUom: 220 },
-      { inventorySkuId: 102, qtyRecipeUom: 50 },
-      { inventorySkuId: 103, qtyRecipeUom: 30 },
-      { inventorySkuId: 106, qtyRecipeUom: 1 },
-    ],
-    4: [
-      { inventorySkuId: 101, qtyRecipeUom: 180 },
-      { inventorySkuId: 102, qtyRecipeUom: 70 },
-      { inventorySkuId: 103, qtyRecipeUom: 40 },
-      { inventorySkuId: 106, qtyRecipeUom: 1 },
-    ],
-    5: [
-      { inventorySkuId: 101, qtyRecipeUom: 220 },
-      { inventorySkuId: 102, qtyRecipeUom: 60 },
-      { inventorySkuId: 103, qtyRecipeUom: 30 },
-      { inventorySkuId: 106, qtyRecipeUom: 1 },
-    ],
-    6: [
-      { inventorySkuId: 101, qtyRecipeUom: 180 },
-      { inventorySkuId: 104, qtyRecipeUom: 5 },
-      { inventorySkuId: 105, qtyRecipeUom: 2 },
-      { inventorySkuId: 106, qtyRecipeUom: 1 },
-    ],
-    7: [
-      { inventorySkuId: 101, qtyRecipeUom: 150 },
-      { inventorySkuId: 104, qtyRecipeUom: 4 },
-      { inventorySkuId: 105, qtyRecipeUom: 1 },
-      { inventorySkuId: 106, qtyRecipeUom: 1 },
-    ],
-    8: [
-      { inventorySkuId: 101, qtyRecipeUom: 160 },
-      { inventorySkuId: 104, qtyRecipeUom: 4 },
-      { inventorySkuId: 106, qtyRecipeUom: 1 },
-    ],
-  });
-
-  async function loadMasterData() {
-    try {
-      const [
-        { data: inventoryData, error: inventoryError },
-        { data: productData, error: productError },
-        { data: typeData, error: typeError },
-        { data: valueData, error: valueError },
-        { data: variantData, error: variantError },
-        { data: variantValueData, error: variantValueError },
-        { data: productionEntryData, error: productionEntryError },
-        { data: variantStockData, error: variantStockError },
-      ] = await Promise.all([
-        supabase.from("inventory_sku").select("*").eq("is_active", true).order("sku_code"),
-        supabase.from("production_sku").select("*").eq("is_active", true).order("sku_code"),
-        supabase.from("variation_type").select("*").order("id"),
-        supabase.from("variation_value").select("*").order("id"),
-        supabase.from("product_variant").select("*").eq("is_active", true).order("id"),
-        supabase.from("product_variant_value").select("*"),
-        supabase.from("production_entry").select("production_sku_id, product_variant_id, production_quantity"),
-        supabase.from("product_variant_stock").select("product_variant_id, current_stock, minimum_stock"),
-      ]);
-      const error = inventoryError || productError || typeError || valueError || variantError || variantValueError || productionEntryError || variantStockError;
-      if (error) throw error;
-
-      const inventory = (inventoryData || []).map((item) => ({
-        id: item.id, skuType: "inventory", sku: item.sku_code, name: item.sku_name, category: item.category || "",
-        price: Number(item.price || 0),
-        stock: Number(item.inventory_to_recipe || 1) > 0 ? Number(item.current_stock || 0) / Number(item.inventory_to_recipe || 1) : 0,
-        minimum: Number(item.inventory_to_recipe || 1) > 0 ? Number(item.minimum_stock ?? item.low_stock_level ?? 0) / Number(item.inventory_to_recipe || 1) : 0,
-        orderUom: item.order_uom || "", inventoryUom: item.inventory_uom || "", recipeUom: item.recipe_uom || "",
-        orderToInventory: Number(item.order_to_inventory || 1), inventoryToRecipe: Number(item.inventory_to_recipe || 1),
-        produced: 0, sold: 0, purchaseHistory: [],
-      }));
-
-      const production = (productData || []).map((item) => {
-        const productTypes = (typeData || []).filter((type) => type.production_sku_id === item.id && type.type_name === "Size");
-        const optionGroups = productTypes.map((type) => ({
-          id: `type-${type.id}`, databaseId: type.id, name: type.type_name, required: true, priceImpact: true, recipeImpact: true,
-          options: (valueData || []).filter((value) => value.variation_type_id === type.id).map((value) => ({
-            id: `value-${value.id}`, databaseId: value.id, name: value.value_name, priceAdjustment: 0, recipeChanges: [],
-          })),
-        }));
-        const variants = (variantData || []).filter((variant) => variant.production_sku_id === item.id).map((variant) => {
-          const linkedValueIds = (variantValueData || []).filter((link) => link.product_variant_id === variant.id).map((link) => link.variation_value_id);
-          const selections = {};
-          productTypes.forEach((type) => {
-            const selectedValue = (valueData || []).find((value) => value.variation_type_id === type.id && linkedValueIds.includes(value.id));
-            if (selectedValue) selections[`type-${type.id}`] = `value-${selectedValue.id}`;
-          });
-          const stockRow = (variantStockData || []).find((row) => row.product_variant_id === variant.id);
-          const produced = (productionEntryData || []).filter((entry) => entry.product_variant_id === variant.id).reduce((sum, entry) => sum + Number(entry.production_quantity || 0), 0);
-          return { id: variant.id, code: variant.variant_code, name: variant.variant_name || "", price: Number(variant.selling_price || 0), produced, stock: Number(stockRow?.current_stock || 0), minimumStock: Number(stockRow?.minimum_stock || 0), selections };
-        });
-        return {
-          id: item.id, skuType: "product", sku: item.sku_code, name: item.sku_name, category: item.category || "", price: Number(item.base_price || 0), taxApplicable: item.tax_applicable !== false,
-          stock: variants.reduce((sum, variant) => sum + Number(variant.stock || 0), 0), minimum: 0,
-          produced: variants.reduce((sum, variant) => sum + Number(variant.produced || 0), 0), sold: 0, optionGroups, variants,
-        };
-      });
-      setProducts([...inventory, ...production]);
-    } catch (error) {
-      console.error("Load master data error:", error);
-    }
-  }
-
-  async function loadConfig() {
-    const { data, error } = await supabase.rpc("get_config_options");
-    if (error) { console.error("Load config error:", error); return; }
-    setConfigOptions(data || []);
-  }
-
-  async function loadOrders() {
-    const { data, error } = await supabase.from("sales_order").select("*, sales_order_item(*, sales_order_item_option(*))").order("created_at", { ascending: false });
-    if (error) { console.error("Load orders error:", error); return; }
-    setOrders((data || []).map((order) => ({
-      id: order.order_no, orderDate: order.created_at, customerName: order.customer_name || "", customerTelephone: order.customer_telephone || "",
-      subtotal: Number(order.subtotal || 0), tax: Number(order.tax_amount || 0), grandTotal: Number(order.grand_total || 0),
-      paymentStatus: order.payment_status, pickupStatus: order.pickup_status,
-      items: (order.sales_order_item || []).map((item) => ({
-        id: item.id, productId: item.production_sku_id, variantId: item.product_variant_id, sku: item.variant_code || item.sku_code,
-        name: item.sku_name, price: Number(item.unit_price || 0), qty: Number(item.quantity || 0), lineTotal: Number(item.line_total || 0),
-        selectedOptions: (item.sales_order_item_option || []).map((option) => ({ groupName: option.option_group_name, optionName: option.option_value_name })),
+    setConfirmation({
+      ...data,
+      customer_name: customerName.trim(),
+      customer_telephone: customerTelephone.trim(),
+      items: cart.map((item) => ({
+        name: item.name,
+        qty: item.qty,
+        price: item.price,
+        lineTotal: item.price * item.qty,
+        options: (item.selectedOptions || []).map((o) => `${o.groupName}: ${o.optionName}`),
       })),
-    })));
+      subtotal,
+      tax,
+      grand_total: Number(data?.grand_total ?? total),
+      created_at: new Date().toISOString(),
+    });
+    setCart([]); setCustomerName(""); setCustomerTelephone(""); await loadMenu();
   }
 
-  async function loadInventoryUsage() {
-    const { data, error } = await supabase.rpc("get_inventory_production_usage");
-    if (error) {
-      console.error("Load inventory usage error:", error);
-      setInventoryUsage([]);
-      return;
-    }
-    setInventoryUsage((data || []).map((row) => ({
-      id: row.inventory_sku_id,
-      sku: row.sku_code || "",
-      name: row.sku_name || "Inventory SKU",
-      usage: Number(row.usage || 0),
-      uom: row.recipe_uom || "",
-    })));
+  function downloadReceipt() {
+    if (!confirmation) return;
+    const receipt = `<!doctype html><html><head><meta charset="utf-8"><title>${confirmation.order_no}</title><style>
+      @page{size:A4;margin:18mm}body{font-family:Arial,sans-serif;color:#222;max-width:700px;margin:auto}h1{text-align:center;margin-bottom:4px}.center{text-align:center}.muted{color:#666}.box{border:1px solid #ddd;border-radius:10px;padding:14px;margin:18px 0}.row{display:flex;justify-content:space-between;gap:16px;padding:7px 0;border-bottom:1px solid #eee}.row:last-child{border-bottom:0}.total{font-size:20px;font-weight:700}.item{padding:10px 0;border-bottom:1px solid #eee}.item:last-child{border-bottom:0}.item-head{display:flex;justify-content:space-between;font-weight:700}.options{font-size:12px;color:#666;margin-top:4px}.footer{text-align:center;margin-top:28px;color:#666;font-size:12px}</style></head><body>
+      <h1>HanaAzz Enterprise</h1><div class="center muted">Order Receipt</div>
+      <div class="box"><div class="row"><span>Order No.</span><strong>${confirmation.order_no}</strong></div><div class="row"><span>Date</span><span>${new Date(confirmation.created_at).toLocaleString()}</span></div><div class="row"><span>Customer</span><span>${confirmation.customer_name}</span></div><div class="row"><span>Telephone</span><span>${confirmation.customer_telephone}</span></div></div>
+      <h3>Order Summary</h3><div class="box">${(confirmation.items || []).map((item)=>`<div class="item"><div class="item-head"><span>${item.name} × ${item.qty}</span><span>${money(item.lineTotal)}</span></div>${item.options?.length?`<div class="options">${item.options.join(" • ")}</div>`:""}<div class="options">${money(item.price)} each</div></div>`).join("")}</div>
+      <div class="box"><div class="row"><span>Subtotal</span><strong>${money(confirmation.subtotal)}</strong></div><div class="row"><span>Tax</span><strong>${money(confirmation.tax)}</strong></div><div class="row total"><span>Total</span><span>${money(confirmation.grand_total)}</span></div><div class="row"><span>Payment</span><strong>Pay Later</strong></div><div class="row"><span>Status</span><strong>Pending Payment</strong></div></div>
+      <div class="footer">Please proceed to the counter for payment.<br>Thank you for your order.</div>
+      <script>window.onload=()=>window.print();<\/script></body></html>`;
+    const win = window.open("", "_blank");
+    if (!win) return alert("Please allow pop-ups to save your receipt.");
+    win.document.open(); win.document.write(receipt); win.document.close();
   }
 
-  useEffect(() => { if (user) { loadMasterData(); loadOrders(); loadInventoryUsage(); loadConfig(); } }, [user]);
-
-  useEffect(() => {
-    if (!user || isPublicOrder) return;
-
-    const channel = supabase
-      .channel("staff-sales-order-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "sales_order" },
-        () => {
-          loadOrders();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user, isPublicOrder]);
-
-
-  if (isPublicOrder) return <PublicOrderPage />;
-  if (!user) return <Login onLogin={setUser} />;
-
-  return (
-    <AppShell user={user} page={page} setPage={setPage} onLogout={() => { setUser(null); setPage("dashboard"); }}>
-      {page === "dashboard" && <Dashboard products={products} orders={orders} recipes={recipes} inventoryUsage={inventoryUsage} onNavigate={setPage} />}
-      {page === "order" && <OrderTaking products={products} setProducts={setProducts} orders={orders} setOrders={setOrders} onNavigate={setPage} reloadOrders={loadOrders} />}
-      {page === "orderHistory" && <OrderHistory orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} reloadOrders={loadOrders} />}
-      {page === "inventory" && <Inventory products={products} setProducts={setProducts} configOptions={configOptions} />}
-      {page === "recipe" && <RecipeManagement products={products} recipes={recipes} setRecipes={setRecipes} setProducts={setProducts} />}
-      {page === "production" && <Production products={products} setProducts={setProducts} recipes={recipes} configOptions={configOptions} />}
-      {page === "config" && <Config options={configOptions} reloadConfig={loadConfig} />}
-    </AppShell>
-  );
-}
-
-ReactDOM.createRoot(document.getElementById("root")).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+  if(confirmation) return <div className="public-order-page"><div className="public-order-header"><div><strong>HanaAzz Enterprise</strong><span>Customer Order</span></div></div><div className="public-confirmation"><PackageCheck size={48}/><p className="eyebrow">ORDER CONFIRMED</p><h1>Thank you!</h1><p>Your order has been sent to the store.</p><div className="public-order-number"><span>Order No.</span><strong>{confirmation.order_no}</strong></div><div className="confirmation-customer"><div><span>Customer</span><strong>{confirmation.customer_name}</strong></div><div><span>Telephone</span><strong>{confirmation.customer_telephone}</strong></div></div><div className="confirmation-items">{(confirmation.items||[]).map((item,index)=><div className="confirmation-item" key={index}><div><strong>{item.name} × {item.qty}</strong>{item.options?.length>0&&<span>{item.options.join(" • ")}</span>}</div><strong>{money(item.lineTotal)}</strong></div>)}</div><div className="bill"><div><span>Subtotal</span><strong>{money(confirmation.subtotal)}</strong></div><div><span>Tax</span><strong>{money(confirmation.tax)}</strong></div><div className="total"><span>Total</span><strong>{money(confirmation.grand_total)}</strong></div><div><span>Payment</span><strong>Pay Later</strong></div><div><span>Status</span><strong>Pending Payment</strong></div></div><p className="muted">Please proceed to the counter for payment.</p><div className="receipt-save-box"><strong>Would you like to save your order receipt?</strong><span>You can save the receipt as a PDF on your phone or computer.</span><button className="primary-btn full" onClick={downloadReceipt}>Download PDF Receipt</button></div><button className="secondary-btn full" onClick={()=>setConfirmation(null)}>Create Another Order</button></div></div>;
