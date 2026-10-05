@@ -570,24 +570,20 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, rel
     try {
       const rpcItems = cart.map((item) => {
         const product = products.find((p) => p.id === item.productId);
-        const selectedIds = Object.values(item.selections || {}).filter(Boolean).sort();
-        const selectedDbValueIds = (item.selectedOptions || []).map((option) => {
-          const group = (product?.optionGroups || []).find((g) => g.id === option.groupId);
-          const value = group?.options?.find((x) => x.id === option.optionId);
-          return value?.databaseId;
-        }).filter(Boolean).sort((a,b) => a-b);
-        const variant = (product?.variants || []).find((v) => {
-          const variantIds = Object.values(v.selections || {}).filter(Boolean).sort();
-          if (JSON.stringify(variantIds) === JSON.stringify(selectedIds)) return true;
-          const variantDbIds = Object.values(v.selections || {}).map((selectionId) => {
+        const selectedNames = (item.selectedOptions || []).map((option) => String(option.optionName || "").trim().toLowerCase()).filter(Boolean);
+        let variant = (product?.variants || []).find((v) => {
+          const variantNames = Object.values(v.selections || {}).map((selectionId) => {
             for (const group of product?.optionGroups || []) {
               const value = group.options?.find((x) => x.id === selectionId);
-              if (value?.databaseId) return value.databaseId;
+              if (value?.name) return String(value.name).trim().toLowerCase();
             }
-            return null;
-          }).filter(Boolean).sort((a,b) => a-b);
-          return JSON.stringify(variantDbIds) === JSON.stringify(selectedDbValueIds);
+            return "";
+          }).filter(Boolean);
+          return selectedNames.length > 0 && selectedNames.every((name) => variantNames.includes(name));
         });
+        if (!variant && selectedNames.length === 1) {
+          variant = (product?.variants || []).find((v) => String(v.name || "").trim().toLowerCase() === selectedNames[0]);
+        }
         if (!variant) throw new Error("No Product Variant matches the selected options.");
         return {
           product_variant_id: variant.id,
