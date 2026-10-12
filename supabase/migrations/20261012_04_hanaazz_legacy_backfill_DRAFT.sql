@@ -31,7 +31,7 @@ join public.mha_company c on c.id=s.company_id
 where c.company_code='HANAAZZ' and s.store_code='001'
 on conflict(store_id,inventory_sku_id) do nothing;
 insert into public.mha_variant_store_stock(store_id,product_variant_id,current_stock,minimum_stock)
-select s.id,v.product_variant_id,v.current_stock,v.minimum_stock
+select s.id,v.product_variant_id,coalesce(v.current_stock,0),coalesce(v.minimum_stock,0)
 from public.product_variant_stock v cross join public.mha_store s
 join public.mha_company c on c.id=s.company_id
 where c.company_code='HANAAZZ' and s.store_code='001'
@@ -52,6 +52,12 @@ begin
  and st.store_id=(select s.id from public.mha_store s join public.mha_company c on c.id=s.company_id where c.company_code='HANAAZZ' and s.store_code='001')
  where st.current_stock is distinct from coalesce(i.current_stock,0)
  ) then raise exception 'Migration aborted: inventory balance mismatch'; end if;
-end $$;
+if exists (
+ select 1 from public.product_variant_stock v
+ left join public.mha_variant_store_stock st on st.product_variant_id=v.product_variant_id
+ and st.store_id=(select s.id from public.mha_store s join public.mha_company c on c.id=s.company_id where c.company_code='HANAAZZ' and s.store_code='001')
+ where st.current_stock is distinct from coalesce(v.current_stock,0)
+ ) then raise exception 'Migration aborted: variant stock mismatch'; end if;
+end $;
 commit;
 -- IMPORTANT: This migration alone does not activate tenant RLS or store-aware RPCs.
