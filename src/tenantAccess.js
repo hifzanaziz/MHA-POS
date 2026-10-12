@@ -1,5 +1,3 @@
-import { supabase } from './supabase.js';
-
 export const STAFF_MODULES = ['dashboard','order','orderHistory','inventory','recipe','config','production'];
 export const SUPER_ADMIN_MODULES = ['company_management','store_management','user_access','user_matrix'];
 
@@ -16,12 +14,6 @@ export function availableStores(context) {
 export function selectDefaultStore(context) {
   const stores = availableStores(context);
   return stores.find(s => s.id === context.default_store_id) || stores[0] || null;
-}
-export async function fetchAccessContext() {
-  const { data, error } = await supabase.rpc('mha_my_access_context');
-  if (error) throw new Error(error.message || 'Unable to verify your access.');
-  if (!data || !Array.isArray(data.stores)) throw new Error('Invalid account access context.');
-  return data;
 }
 export function requireSelectedStore(context, storeId, moduleId, mode = 'VIEW') {
   const store = availableStores(context).find(s => String(s.id) === String(storeId));
