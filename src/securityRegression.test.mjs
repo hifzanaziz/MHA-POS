@@ -58,3 +58,12 @@ test('migrated main App does not contain old unscoped loader calls',()=>{
 // These tests check repository invariants only. Real RLS, JWT claims, tenant isolation,
 // Auth user provisioning, and SECURITY DEFINER behavior require a separate authenticated
 // database integration suite and must NOT be inferred from passing static tests.
+
+test('cross-company reassignment removes old store links before updating profile',()=>{
+ const sql=read('supabase/migrations/20261012_29_admin_assign_existing_user.sql');
+ const remove=sql.indexOf('delete from public.mha_user_store where user_id=v_user;');
+ const update=sql.indexOf('insert into public.mha_user_profile(');
+ const assign=sql.indexOf('insert into public.mha_user_store(');
+ assert.ok(remove>=0 && update>=0 && assign>=0);
+ assert.ok(remove<update && update<assign,'Old company links must be removed before profile company changes');
+});
