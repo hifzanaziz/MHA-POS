@@ -11,7 +11,7 @@ export function canUseModule(profile, permissions, moduleId, mode = 'VIEW') {
 export function assignedStores(profile, stores, assignments) {
   if (!profile?.is_active) return [];
   const allowed = new Set((assignments ?? []).filter(a => a.user_id === profile.user_id && a.company_id === profile.company_id).map(a => a.store_id));
-  return (stores ?? []).filter(s => s.is_active && s.company_id === profile.company_id && (profile.is_super_admin === true || allowed.has(s.id)));
+  return (stores ?? []).filter(s => s.is_active && (profile.is_super_admin === true || (s.company_id === profile.company_id && allowed.has(s.id))));
 }
 export function parseStoreOrderPath(pathname) {
   // New URLs are /order/store/STORECODE; legacy /order must not infer a destination.
