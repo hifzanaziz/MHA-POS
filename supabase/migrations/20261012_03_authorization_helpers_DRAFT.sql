@@ -8,7 +8,7 @@ as $$
    join public.mha_store s on s.id = p_store_id and s.is_active
    join public.mha_company c on c.id = s.company_id and c.is_active
    where u.user_id = (select auth.uid()) and u.is_active
-     and (u.is_super_admin or (
+     and ((u.is_super_admin and u.company_id is null and u.role_id is null) or (
        u.company_id = s.company_id
        and exists (select 1 from public.mha_user_store us
          where us.user_id = u.user_id and us.store_id = s.id
@@ -27,7 +27,7 @@ as $$
    join public.mha_company c on c.id = p_company_id and c.is_active
    where u.user_id = (select auth.uid()) and u.is_active
      and (
-       u.is_super_admin
+       (u.is_super_admin and u.company_id is null and u.role_id is null)
        or (
          u.company_id = p_company_id
          and p_submodule_code not in ('company_management','store_management','user_access','user_matrix')
@@ -45,5 +45,9 @@ as $$
 $$;
 revoke all on function public.mha_has_permission(bigint,text,text) from public;
 grant execute on function public.mha_has_permission(bigint,text,text) to authenticated;
+-- Defense in depth: these helpers must never be treated as an authorization
+-- mechanism for user-profile writes. All changes to is_super_admin, role_id,
+-- company_id, and store assignments require audited privileged server functions.
+-- Never grant client roles UPDATE on mha_user_profile or mha_user_store.
 -- IMPORTANT: These helpers alone do not secure legacy tables or SECURITY DEFINER RPCs.
 -- Before release, enforce ownership on every table and all transaction functions.
