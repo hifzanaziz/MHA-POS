@@ -21,10 +21,10 @@ begin
   end if;
   update public.inventory_sku set company_id=v_company_id where company_id is null;
   update public.production_sku set company_id=v_company_id where company_id is null;
-  update public.mha_user_profile set company_id=v_company_id where company_id is null;
+  -- Super Admin is global and must remain company-independent.\n  -- Do not backfill user profiles without first verifying their role.
 end $$;
 -- This is deliberately rollback-only until the rehearsal is validated.
 select 'inventory_missing_company' check_name,count(*) remaining from public.inventory_sku where company_id is null
 union all select 'production_missing_company',count(*) from public.production_sku where company_id is null
-union all select 'profile_missing_company',count(*) from public.mha_user_profile where company_id is null;
+union all select 'unassigned_non_admin_profiles',count(*) from public.mha_user_profile p\nwhere p.company_id is null and not exists\n  (select 1 from public.mha_super_admin_identity a where a.user_id=p.user_id);
 rollback;
