@@ -2639,7 +2639,8 @@ function PublicOrderPage() {
 }
 
 function App() {
-  const isPublicOrder = window.location.pathname === "/order" || window.location.pathname === "/customer-order";
+  const publicOrderPath = window.location.pathname === "/order" || window.location.pathname === "/customer-order" || window.location.pathname.startsWith("/order/store/");
+  const isPublicOrder = publicOrderPath;
   const [user, setUser] = useState(null);
   const [accessContext, setAccessContext] = useState(null);
   const [selectedStoreId, setSelectedStoreId] = useState(null);
@@ -2771,7 +2772,7 @@ function App() {
   }, [user, isPublicOrder, accessContext, selectedStoreId]);
 
 
-  if (isPublicOrder) return <PublicOrderPage />;
+  if (isPublicOrder) return <div className="public-loading">Public ordering is temporarily unavailable on this Phase 1 preview until store-specific ordering is verified. No order has been submitted.</div>;
   if (!user) return <Login onLogin={setUser} />;
   if (accessError) return <div className="login-page"><div className="login-card"><h2>Access unavailable</h2><p>{accessError}</p><button onClick={async()=>{await supabase.auth.signOut();setUser(null);}}>Sign out</button></div></div>;
   if (!accessContext) return <div className="public-loading">Verifying company and store access...</div>;
