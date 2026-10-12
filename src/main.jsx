@@ -704,7 +704,7 @@ function OrderTaking({ products, setProducts, orders, setOrders, onNavigate, rel
 }
 
 
-function OrderHistory({ orders, setOrders, products, setProducts, reloadOrders }) {
+function OrderHistory({ orders, setOrders, products, setProducts, reloadOrders, selectedStoreId }) {
   const [selected, setSelected] = useState(null);
   const [modal, setModal] = useState(null);
   const [query, setQuery] = useState("");
@@ -748,7 +748,7 @@ function OrderHistory({ orders, setOrders, products, setProducts, reloadOrders }
 
   async function completePayment() {
     try {
-      const { error } = await supabase.rpc("complete_sales_order_payment", { p_order_no: selected.id });
+      const { error } = await supabase.rpc("mha_complete_store_order_payment", { p_store_id: selectedStoreId, p_order_no: selected.id });
       if (error) throw error;
       await reloadOrders();
       setModal(null);
@@ -758,7 +758,7 @@ function OrderHistory({ orders, setOrders, products, setProducts, reloadOrders }
 
   async function confirmPickup() {
     try {
-      const { error } = await supabase.rpc("complete_sales_order_pickup", { p_order_no: selected.id });
+      const { error } = await supabase.rpc("mha_complete_store_order_pickup", { p_store_id: selectedStoreId, p_order_no: selected.id });
       if (error) throw error;
       await reloadOrders();
       setModal(null);
@@ -2782,7 +2782,8 @@ function App() {
   }
 
   async function loadOrders() {
-    const { data, error } = await supabase.from("sales_order").select("*, sales_order_item(*, sales_order_item_option(*))").order("created_at", { ascending: false });
+    if (!accessContext || !selectedStoreId) { setOrders([]); return; }
+    const { data, error } = await supabase.from("sales_order").select("*, sales_order_item(*, sales_order_item_option(*))").eq("store_id",selectedStoreId).order("created_at", { ascending: false });
     if (error) { console.error("Load orders error:", error); return; }
     setOrders((data || []).map((order) => ({
       id: order.order_no, orderDate: order.created_at, customerName: order.customer_name || "", customerTelephone: order.customer_telephone || "",
@@ -2812,7 +2813,7 @@ function App() {
     })));
   }
 
-  useEffect(() => { if (user) { loadMasterData(); loadOrders(); loadInventoryUsage(); loadConfig(); } }, [user]);
+  useEffect(() => { if (user && accessContext && selectedStoreId) { setOrders([]); loadOrders(); } }, [user,accessContext,selectedStoreId]);
 
   useEffect(() => {
     if (!user || isPublicOrder) return;
@@ -2846,7 +2847,7 @@ function App() {
     <AppShell user={user} page={permittedPage} setPage={setPage} context={accessContext} selectedStoreId={selectedStoreId} onSelectStore={setSelectedStoreId} onLogout={async () => { await supabase.auth.signOut(); setProducts([]); setOrders([]); setUser(null); setPage("dashboard"); }}>
       {permittedPage === "dashboard" && <Dashboard products={products} orders={orders} recipes={recipes} inventoryUsage={inventoryUsage} onNavigate={setPage} />}
       {permittedPage === "order" && <OrderTaking products={products} setProducts={setProducts} orders={orders} setOrders={setOrders} onNavigate={setPage} reloadOrders={loadOrders} />}
-      {permittedPage === "orderHistory" && <OrderHistory orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} reloadOrders={loadOrders} />}
+      {permittedPage === "orderHistory" && <OrderHistory orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} reloadOrders={loadOrders} selectedStoreId={selectedStoreId} />}
       {permittedPage === "inventory" && <Inventory products={products} setProducts={setProducts} configOptions={configOptions} />}
       {permittedPage === "recipe" && <RecipeManagement products={products} recipes={recipes} setRecipes={setRecipes} setProducts={setProducts} />}
       {permittedPage === "production" && <Production products={products} setProducts={setProducts} recipes={recipes} configOptions={configOptions} />}
