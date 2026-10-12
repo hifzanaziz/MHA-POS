@@ -44,6 +44,17 @@ alter table public.mha_inventory_store_stock
 alter table public.mha_variant_store_stock
  add constraint mha_variant_stock_store_company_fk foreign key(store_id,company_id) references public.mha_store(id,company_id);
 alter table public.mha_inventory_store_stock enable row level security;
+-- Enforce variant ownership by linking its parent production SKU to the company.
+-- A composite variant key is required to validate both product and company.
+alter table public.product_variant add constraint mha_variant_id_product_key unique(id,production_sku_id);
+alter table public.mha_variant_store_stock add column production_sku_id bigint;
+alter table public.mha_variant_store_stock
+ add constraint mha_variant_stock_variant_fk foreign key(product_variant_id,production_sku_id)
+ references public.product_variant(id,production_sku_id);
+alter table public.mha_variant_store_stock
+ add constraint mha_variant_stock_product_company_fk foreign key(production_sku_id,company_id)
+ references public.production_sku(id,company_id);
+alter table public.mha_variant_store_stock alter column production_sku_id set not null;
 alter table public.mha_variant_store_stock enable row level security;
 -- Migration must backfill historical rows and stock, then validate all ownership,
 -- update every RPC to require server-verified store context, replace legacy RLS,
