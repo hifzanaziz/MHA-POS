@@ -2843,15 +2843,17 @@ function App() {
   const permittedPage = accessLevel(accessContext,page) !== "NONE" ? page : (["dashboard","order","orderHistory","inventory","recipe","config","production"].find(id => accessLevel(accessContext,id) !== "NONE") || null);
   if (!permittedPage) return <div className="public-loading">No module access assigned to this account.</div>;
 
+  const migratedPages = new Set(["orderHistory"]);
   return (
     <AppShell user={user} page={permittedPage} setPage={setPage} context={accessContext} selectedStoreId={selectedStoreId} onSelectStore={setSelectedStoreId} onLogout={async () => { await supabase.auth.signOut(); setProducts([]); setOrders([]); setUser(null); setPage("dashboard"); }}>
-      {permittedPage === "dashboard" && <Dashboard products={products} orders={orders} recipes={recipes} inventoryUsage={inventoryUsage} onNavigate={setPage} />}
-      {permittedPage === "order" && <OrderTaking products={products} setProducts={setProducts} orders={orders} setOrders={setOrders} onNavigate={setPage} reloadOrders={loadOrders} />}
+      {!migratedPages.has(permittedPage) && <div className="chart-card"><h3>Module migration in progress</h3><p>This screen is temporarily disabled on the Phase 1 branch while its data and write operations are moved to store-scoped APIs. No legacy cross-store operation will run from this screen.</p></div>}
+      {migratedPages.has(permittedPage) && permittedPage === "dashboard" && <Dashboard products={products} orders={orders} recipes={recipes} inventoryUsage={inventoryUsage} onNavigate={setPage} />}
+      {migratedPages.has(permittedPage) && permittedPage === "order" && <OrderTaking products={products} setProducts={setProducts} orders={orders} setOrders={setOrders} onNavigate={setPage} reloadOrders={loadOrders} />}
       {permittedPage === "orderHistory" && <OrderHistory orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} reloadOrders={loadOrders} selectedStoreId={selectedStoreId} />}
-      {permittedPage === "inventory" && <Inventory products={products} setProducts={setProducts} configOptions={configOptions} />}
-      {permittedPage === "recipe" && <RecipeManagement products={products} recipes={recipes} setRecipes={setRecipes} setProducts={setProducts} />}
-      {permittedPage === "production" && <Production products={products} setProducts={setProducts} recipes={recipes} configOptions={configOptions} />}
-      {permittedPage === "config" && <Config options={configOptions} reloadConfig={loadConfig} />}
+      {migratedPages.has(permittedPage) && permittedPage === "inventory" && <Inventory products={products} setProducts={setProducts} configOptions={configOptions} />}
+      {migratedPages.has(permittedPage) && permittedPage === "recipe" && <RecipeManagement products={products} recipes={recipes} setRecipes={setRecipes} setProducts={setProducts} />}
+      {migratedPages.has(permittedPage) && permittedPage === "production" && <Production products={products} setProducts={setProducts} recipes={recipes} configOptions={configOptions} />}
+      {migratedPages.has(permittedPage) && permittedPage === "config" && <Config options={configOptions} reloadConfig={loadConfig} />}
     </AppShell>
   );
 }
