@@ -2855,7 +2855,7 @@ function App() {
   if (accessError) return <div className="login-page"><div className="login-card"><h2>Access unavailable</h2><p>{accessError}</p><button onClick={async()=>{await supabase.auth.signOut();setUser(null);}}>Sign out</button></div></div>;
   if (!accessContext) return <div className="public-loading">Verifying company and store access...</div>;
   if (!selectedStoreId) return <div className="public-loading">No active store is assigned to this account.</div>;
-  const permittedPage = accessLevel(accessContext,page) !== "NONE" ? page : (["dashboard","order","orderHistory","inventory","recipe","config","production"].find(id => accessLevel(accessContext,id) !== "NONE") || null);
+  const permittedPage = accessLevel(accessContext,page) !== "NONE" ? page : (["order","orderHistory","inventory","recipe","production","company_management","store_management","user_access","user_matrix"].find(id => accessLevel(accessContext,id) !== "NONE") || null);
   if (!permittedPage) return <div className="public-loading">No module access assigned to this account.</div>;
 
   const migratedPages = new Set(["orderHistory","order","inventory","production","recipe","company_management","store_management","user_matrix","user_access"]);
