@@ -6,7 +6,7 @@ export default function AdminUserAccess({context}) {
  const [form,setForm]=useState({username:'',display_name:'',password:'',company_id:'',role_id:'',store_ids:[],default_store_id:'',is_active:true});
  const [error,setError]=useState('');
  const [busy,setBusy]=useState(false);
- async function load(){const {data:result,error:e}=await supabase.rpc('mha_admin_user_access_catalog');if(e)throw e;return result||{};}
+ async function load(){const [base,staff]=await Promise.all([supabase.rpc('mha_admin_user_access_catalog'),supabase.rpc('mha_admin_staff_catalog')]);if(base.error)throw base.error;if(staff.error)throw staff.error;return {...(base.data||{}),staffUsers:staff.data?.users||[],staffAssignments:staff.data?.assignments||[]};}
  useEffect(()=>{let alive=true;load().then(result=>{if(alive)setData(result);}).catch(e=>{if(alive)setError(e.message);});return()=>{alive=false;};},[]);
  if(!context?.is_super_admin)return <p>Super Admin access required.</p>;
  const stores=(data.stores||[]).filter(s=>s.is_active&&String(s.company_id)===form.company_id);
@@ -31,8 +31,8 @@ export default function AdminUserAccess({context}) {
   <p>Create database-managed staff accounts with one company, one role and multiple assigned stores. Only the pinned Super Admin may create staff.</p>
   {error&&<p role="alert" style={{color:'crimson'}}>{error}</p>}
   <div style={{overflowX:'auto'}}><table style={{width:'100%'}}>
-   <thead><tr><th>Email</th><th>Username</th><th>Company</th><th>Role</th><th>Assigned Stores</th><th>Status</th></tr></thead>
-   <tbody>{(data.users||[]).map(u=><tr key={u.user_id}><td>{u.email}</td><td>{u.username}</td><td>{(data.companies||[]).find(c=>c.id===u.company_id)?.company_name||'MHA'}</td><td>{(data.roles||[]).find(r=>r.id===u.role_id)?.role_name||'Super Admin'}</td><td>{(data.assignments||[]).filter(a=>a.user_id===u.user_id).map(a=>(data.stores||[]).find(s=>s.id===a.store_id)?.store_name||a.store_id).join(', ')||'All (Super Admin)'}</td><td>{u.is_active?'Active':'Inactive'}</td></tr>)}</tbody>
+   <thead><tr><th>Username</th><th>Display Name</th><th>Company</th><th>Role</th><th>Assigned Stores</th><th>Status</th></tr></thead>
+   <tbody>{(data.staffUsers||[]).map(u=><tr key={u.id}><td>{u.username}</td><td>{u.display_name}</td><td>{(data.companies||[]).find(c=>c.id===u.company_id)?.company_name||u.company_id}</td><td>{(data.roles||[]).find(r=>r.id===u.role_id)?.role_name||u.role_id}</td><td>{(data.staffAssignments||[]).filter(a=>a.staff_id===u.id).map(a=>(data.stores||[]).find(s=>s.id===a.store_id)?.store_name||a.store_id).join(', ')||'None'}</td><td>{u.is_active?'Active':'Inactive'}</td></tr>)}</tbody>
   </table></div>
   <form onSubmit={save} style={{display:'grid',gap:12,marginTop:20}}>
    <h3>Create Staff Account</h3>
