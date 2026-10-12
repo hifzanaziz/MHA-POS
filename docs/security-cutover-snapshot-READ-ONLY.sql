@@ -31,9 +31,11 @@ WITH policies AS (
   'get_public_order_menu','get_recipe_management','get_variant_recipe',
   'process_production','remove_config_option','rls_auto_enable',
   'save_base_recipe','save_variant_recipe','validate_product_variant_setup'])
- AND (CASE WHEN role_name='PUBLIC'
-   THEN has_function_privilege('public',p.oid,'EXECUTE')
-   ELSE has_function_privilege(role_name,p.oid,'EXECUTE') END)
+ AND EXISTS (SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+  WHERE acl.privilege_type='EXECUTE' AND (
+   (role_name='PUBLIC' AND acl.grantee=0) OR
+   (role_name<>'PUBLIC' AND acl.grantee=(SELECT oid FROM pg_roles WHERE rolname=role_name))
+  ))
 )
 SELECT kind,object_name,statement FROM policies
 UNION ALL SELECT kind,object_name,statement FROM function_grants
