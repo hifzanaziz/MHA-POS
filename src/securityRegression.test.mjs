@@ -112,3 +112,11 @@ test('read-only RPC grant audit covers public, internal and administrative funct
  assert.match(sql,/MISSING_FUNCTION/);
  assert.doesNotMatch(sql,/\b(?:INSERT|UPDATE|DELETE|ALTER|DROP|REVOKE|GRANT)\s+(?:ON|INTO|FROM|TABLE|FUNCTION|public\.)/i);
 });
+
+test('Phase 1 preview cannot mount legacy unscoped public ordering',()=>{
+ const app=read('src/main.jsx');
+ assert.match(app,/const publicOrderPath =/);
+ assert.match(app,/window\.location\.pathname\.startsWith\("\/order\/store\/"\)/);
+ assert.doesNotMatch(app,/if \(isPublicOrder\) return <PublicOrderPage/);
+ assert.match(app,/if \(isPublicOrder\) return <div className="public-loading">Public ordering is temporarily unavailable/);
+});
