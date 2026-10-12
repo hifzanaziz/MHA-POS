@@ -2658,6 +2658,7 @@ function App() {
   const [page, setPage] = useState("dashboard");
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
+  const orderRequestSequence = React.useRef(0);
   const [inventoryUsage, setInventoryUsage] = useState([]);
   const [configOptions, setConfigOptions] = useState([]);
   const [recipes, setRecipes] = useState({
@@ -2782,9 +2783,11 @@ function App() {
   }
 
   async function loadOrders() {
-    if (!accessContext || !selectedStoreId) { setOrders([]); return; }
+    const requestId = ++orderRequestSequence.current;
+    if (!accessContext || !selectedStoreId || accessLevel(accessContext,"orderHistory") === "NONE" && accessLevel(accessContext,"order") === "NONE") { setOrders([]); return; }
     const { data, error } = await supabase.from("sales_order").select("*, sales_order_item(*, sales_order_item_option(*))").eq("store_id",selectedStoreId).order("created_at", { ascending: false });
-    if (error) { console.error("Load orders error:", error); return; }
+    if (requestId !== orderRequestSequence.current) return;
+    if (error) { console.error("Load orders error:", error); setOrders([]); return; }
     setOrders((data || []).map((order) => ({
       id: order.order_no, orderDate: order.created_at, customerName: order.customer_name || "", customerTelephone: order.customer_telephone || "",
       subtotal: Number(order.subtotal || 0), tax: Number(order.tax_amount || 0), grandTotal: Number(order.grand_total || 0),
@@ -2813,16 +2816,21 @@ function App() {
     })));
   }
 
-  useEffect(() => { if (user && accessContext && selectedStoreId) { setOrders([]); loadOrders(); } }, [user,accessContext,selectedStoreId]);
+  useEffect(() => {
+    ++orderRequestSequence.current;
+    setOrders([]);
+    if (user && accessContext && selectedStoreId) loadOrders();
+    return () => { ++orderRequestSequence.current; };
+  }, [user,accessContext,selectedStoreId]);
 
   useEffect(() => {
-    if (!user || isPublicOrder) return;
+    if (!user || isPublicOrder || !accessContext || !selectedStoreId) return;
 
     const channel = supabase
-      .channel("staff-sales-order-realtime")
+      .channel(`staff-sales-order-${selectedStoreId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "sales_order" },
+        { event: "*", schema: "public", table: "sales_order", filter: `store_id=eq.${selectedStoreId}` },
         () => {
           loadOrders();
         }
@@ -2832,7 +2840,7 @@ function App() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, isPublicOrder]);
+  }, [user, isPublicOrder, accessContext, selectedStoreId]);
 
 
   if (isPublicOrder) return <PublicOrderPage />;
