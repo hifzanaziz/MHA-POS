@@ -7,7 +7,7 @@ The owner approved starting the multi-company/multi-store system with new operat
 - Initial store: Store 001 (store code 001, public slug hanaazz-001)
 - Company-shared masters: new inventory SKUs, production SKUs, variants, recipes, configuration, selling prices
 - Store-specific: opening stock entered explicitly; new orders, payments, inventory movements and production transactions
-- Existing production rows remain untouched until a separately approved cutover/retention decision.
+- The owner has selected permanent deletion of legacy operational data at the final cutover. Existing production rows must remain untouched until the new system passes validation and the cutover is explicitly authorized for execution.
 
 ## Phase 1 release gates
 1. Apply the foundation and store ownership schema to a validated target environment only.
@@ -20,7 +20,7 @@ The owner approved starting the multi-company/multi-store system with new operat
 
 ## Explicit exclusions
 - Do not execute 20261012_04_hanaazz_legacy_backfill_DRAFT.sql.
-- Do not delete/truncate historical production data.
+- Do not delete/truncate historical production data before final cutover validation and explicit execution authorization.
 - Do not set existing rows' company_id or store_id to the new tenant.
 - Do not expose old rows through unscoped queries or legacy RPCs.
-- Do not promote drafts to production until code, schema, and security are tested together.
+- Do not promote drafts to production until code, schema, and security are tested together.\n- Prepare a dependency-ordered deletion plan with a verified backup, dry-run row counts, and a rollback/recovery procedure before destructive execution.\n- Preserve Supabase Auth accounts unless separately authorized for deletion; deleting POS operational records is not permission to delete identities.\n- Never execute a destructive script as part of ordinary schema migration or application startup.
