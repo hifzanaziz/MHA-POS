@@ -7,7 +7,12 @@ alter table public.config_option add column if not exists company_id bigint refe
 -- Composite keys ensure store availability cannot reference another company's SKU.
 alter table public.production_sku add constraint mha_production_sku_company_key unique(id,company_id);
 alter table public.inventory_sku add constraint mha_inventory_sku_company_key unique(id,company_id);
-alter table public.mha_store_product_availability add column if not exists company_id bigint;\n-- Populate any pre-existing availability rows before enforcing NOT NULL.\nupdate public.mha_store_product_availability a\nset company_id=s.company_id from public.mha_store s\nwhere s.id=a.store_id and a.company_id is null;\nalter table public.mha_store_product_availability alter column company_id set not null;
+alter table public.mha_store_product_availability add column if not exists company_id bigint;
+-- Populate any pre-existing availability rows before enforcing NOT NULL.
+update public.mha_store_product_availability a
+set company_id=s.company_id from public.mha_store s
+where s.id=a.store_id and a.company_id is null;
+alter table public.mha_store_product_availability alter column company_id set not null;
 alter table public.mha_store_product_availability
  add constraint mha_availability_store_company_fk foreign key(store_id,company_id)
  references public.mha_store(id,company_id);
@@ -21,7 +26,8 @@ alter table public.inventory_purchase add column if not exists store_id bigint r
 alter table public.stock_transaction add column if not exists store_id bigint references public.mha_store(id);
 create table if not exists public.mha_inventory_store_stock (
  store_id bigint not null references public.mha_store(id),
- inventory_sku_id bigint not null references public.inventory_sku(id),\n company_id bigint not null,
+ inventory_sku_id bigint not null references public.inventory_sku(id),
+ company_id bigint not null,
  current_stock numeric not null default 0,
  minimum_stock numeric not null default 0,
  updated_at timestamptz not null default now(),
@@ -29,7 +35,8 @@ create table if not exists public.mha_inventory_store_stock (
 );
 create table if not exists public.mha_variant_store_stock (
  store_id bigint not null references public.mha_store(id),
- product_variant_id bigint not null references public.product_variant(id),\n company_id bigint not null,
+ product_variant_id bigint not null references public.product_variant(id),
+ company_id bigint not null,
  current_stock numeric not null default 0,
  minimum_stock numeric not null default 0,
  updated_at timestamptz not null default now(),
