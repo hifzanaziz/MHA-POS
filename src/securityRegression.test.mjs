@@ -103,3 +103,12 @@ test('foundational tenant RPC migration order is reproducible',()=>{
  assert.match(access,/mha_super_admin_identity/);
  assert.match(access,/GRANT EXECUTE ON FUNCTION[\s\S]*TO authenticated/i);
 });
+
+test('read-only RPC grant audit covers public, internal and administrative functions',()=>{
+ const sql=read('docs/mha-rpc-grant-audit-READ-ONLY.sql');
+ for(const name of ['mha_public_store_menu','mha_create_public_store_order','mha_reserve_variant_stock','mha_admin_assign_existing_user','mha_my_access_context'])
+  assert.ok(sql.includes(name),name+' absent from grant matrix');
+ assert.match(sql,/UNREVIEWED_FUNCTION/);
+ assert.match(sql,/MISSING_FUNCTION/);
+ assert.doesNotMatch(sql,/\b(?:INSERT|UPDATE|DELETE|ALTER|DROP|REVOKE|GRANT)\s+(?:ON|INTO|FROM|TABLE|FUNCTION|public\.)/i);
+});
