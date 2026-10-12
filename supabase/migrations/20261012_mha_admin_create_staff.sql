@@ -16,7 +16,7 @@ begin
  ) then raise exception 'Not authorized' using errcode='42501'; end if;
  if p_username is null or p_username !~ '^[A-Za-z0-9._-]{3,80}$'
     or p_display_name is null or length(btrim(p_display_name)) not between 1 and 120
-    or p_password is null or length(p_password) < 12 or length(p_password)>1024
+    or p_password is null or length(p_password) < 12 or octet_length(p_password)>72
  then raise exception 'Invalid staff account details'; end if;
  if p_store_ids is null or cardinality(p_store_ids)=0 or not (p_default_store_id=any(p_store_ids))
  then raise exception 'Select assigned stores and a valid default store'; end if;
