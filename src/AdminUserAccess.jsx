@@ -18,11 +18,11 @@ export default function AdminUserAccess({context}) {
   try {
    const {error:e}=await supabase.rpc('mha_admin_create_staff',{
     p_username:form.username.trim(),p_display_name:form.display_name.trim(),p_password:form.password,p_company_id:Number(form.company_id),
-    p_role_id:Number(form.role_id),p_store_ids:form.store_ids,p_default_store_id:Number(form.default_store_id),p_is_active:form.is_active
+    p_role_id:Number(form.role_id),p_store_ids:form.store_ids,p_default_store_id:Number(form.default_store_id)
    });
    if(e)throw e;
    setData(await load());
-   setError('Staff account created. Staff login is not available until the secure session service is deployed.');setForm({username:'',display_name:'',password:'',company_id:'',role_id:'',store_ids:[],default_store_id:'',is_active:true});
+   setError('Staff account created. Database-managed staff login requires the separate staff sign-in flow.');setForm({username:'',display_name:'',password:'',company_id:'',role_id:'',store_ids:[],default_store_id:'',is_active:true});
   }catch(e){setError(e.message||'Unable to assign user.');}
   finally{setBusy(false);}
  }
