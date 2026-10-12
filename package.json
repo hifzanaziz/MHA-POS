@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test src/inventoryUtils.test.mjs src/recipeUtils.test.mjs src/productUtils.test.mjs src/componentRegression.test.mjs src/orderUtils.test.mjs src/dashboardUtils.test.mjs"
+    "test": "node --test src/inventoryUtils.test.mjs src/recipeUtils.test.mjs src/productUtils.test.mjs src/componentRegression.test.mjs src/orderUtils.test.mjs src/dashboardUtils.test.mjs src/storeContextUtils.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
