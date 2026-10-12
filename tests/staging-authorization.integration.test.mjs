@@ -84,6 +84,27 @@ if(!safe){
   assert.ifError(error);
   assert.deepEqual(data,[],'RLS must hide other company sales orders');
  });
+ test('anonymous clients cannot read company SKU masters directly',async()=>{
+  const c=client();
+  for(const table of ['inventory_sku','production_sku']){
+   const {data,error}=await c.from(table).select('id').limit(5);
+   assert.ifError(error);
+   assert.deepEqual(data,[],table+' must not expose anonymous company data');
+  }
+ });
+ test('authenticated users cannot read another company SKU masters directly',async()=>{
+  const other=await login('OTHER_COMPANY');
+  const manager=await login('MANAGER');
+  for(const table of ['inventory_sku','production_sku']){
+   const own=await manager.from(table).select('id,company_id').limit(1);
+   assert.ifError(own.error);
+   assert.ok(own.data.length>0,'Fixture requires at least one '+table+' in manager company');
+   const companyId=own.data[0].company_id;
+   const cross=await other.from(table).select('id').eq('company_id',companyId).limit(1);
+   assert.ifError(cross.error);
+   assert.deepEqual(cross.data,[],table+' cross-company data must be hidden');
+  }
+ });
  test('Super Admin can read administration catalog',async()=>{
   const c=await login('ADMIN');
   const {data,error}=await c.rpc('mha_admin_user_matrix_catalog');
