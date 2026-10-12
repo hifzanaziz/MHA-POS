@@ -67,3 +67,39 @@ test('cross-company reassignment removes old store links before updating profile
  assert.ok(remove>=0 && update>=0 && assign>=0);
  assert.ok(remove<update && update<assign,'Old company links must be removed before profile company changes');
 });
+
+test('obsolete legacy backfill is archived and cannot be auto-applied',()=>{
+ const migrations=readdirSync(new URL('../supabase/migrations/',import.meta.url));
+ assert.ok(!migrations.some(name=>/legacy_backfill/i.test(name)));
+ assert.match(read('docs/obsolete-hanaazz-legacy-backfill-DO-NOT-APPLY.sql'),/DO NOT EXECUTE/);
+});
+test('foundational tenant RPC migration order is reproducible',()=>{
+ const files=readdirSync(new URL('../supabase/migrations/',import.meta.url)).sort();
+ const expect={
+  foundation:'20261012_01_multi_company_foundation_DRAFT.sql',
+  ownership:'20261012_02_store_ownership_DRAFT.sql',
+  auth:'20261012_03_authorization_helpers_DRAFT.sql',
+  storeContext:'20261012_06_verified_store_context.sql',
+  payment:'20261012_06b_scoped_payment.sql',
+  accessContext:'20261012_06c_access_context.sql',
+  reservation:'20261012_08_store_stock_reservation_DRAFT.sql',
+  pin:'20261012_09_pin_super_admin_DRAFT.sql',
+  order:'20261012_10_staff_store_order.sql'
+ };
+ for(const [key,file] of Object.entries(expect))assert.ok(files.includes(file),key+' migration missing');
+ const index=key=>files.indexOf(expect[key]);
+ for(const [before,after] of [
+  ['foundation','ownership'],['ownership','auth'],['auth','storeContext'],
+  ['storeContext','payment'],['storeContext','accessContext'],
+  ['storeContext','reservation'],['reservation','order'],['pin','order']
+ ])assert.ok(index(before)<index(after),before+' must precede '+after);
+ const context=read('supabase/migrations/'+expect.storeContext);
+ assert.match(context,/mha_can_access_store/);
+ assert.match(context,/REVOKE ALL ON FUNCTION[\s\S]*FROM PUBLIC, anon/i);
+ const payment=read('supabase/migrations/'+expect.payment);
+ assert.match(payment,/mha_current_store_context/);
+ assert.match(payment,/mha_has_permission/);
+ const access=read('supabase/migrations/'+expect.accessContext);
+ assert.match(access,/mha_super_admin_identity/);
+ assert.match(access,/GRANT EXECUTE ON FUNCTION[\s\S]*TO authenticated/i);
+});
