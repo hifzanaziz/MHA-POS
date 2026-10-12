@@ -1,9 +1,10 @@
 create or replace function public.mha_staff_store_menu(p_store_id bigint)
 returns table(production_sku_id bigint,sku_code text,sku_name text,product_variant_id bigint,variant_name text,selling_price numeric,available_stock numeric)
 language plpgsql security definer set search_path='' as $$
+declare v_company_id bigint;
 begin
- if not public.mha_can_access_store(p_store_id) then raise exception 'Store access denied' using errcode='42501'; end if;
- if not (public.mha_has_permission(p_store_id,'order','VIEW') or public.mha_has_permission(p_store_id,'order','EDIT')) then raise exception 'Order access denied' using errcode='42501'; end if;
+ select company_id into v_company_id from public.mha_current_store_context(p_store_id);
+ if not public.mha_has_permission(v_company_id,'order','VIEW') then raise exception 'Order access denied' using errcode='42501'; end if;
  return query select p.id,p.sku_code::text,p.sku_name::text,v.id,v.variant_name::text,v.selling_price,st.current_stock
  from public.mha_store s join public.mha_company c on c.id=s.company_id and c.is_active
  join public.production_sku p on p.company_id=s.company_id and p.is_active
