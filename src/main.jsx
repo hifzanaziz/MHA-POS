@@ -1,3 +1,4 @@
+import AdminUserAccess from './AdminUserAccess.jsx';
 import AdminUserMatrix from './AdminUserMatrix.jsx';
 import AdminCompanyStore from './AdminCompanyStore.jsx';
 import CompanyRecipeManagement from './CompanyRecipeManagement.jsx';
@@ -2857,10 +2858,11 @@ function App() {
   const permittedPage = accessLevel(accessContext,page) !== "NONE" ? page : (["dashboard","order","orderHistory","inventory","recipe","config","production"].find(id => accessLevel(accessContext,id) !== "NONE") || null);
   if (!permittedPage) return <div className="public-loading">No module access assigned to this account.</div>;
 
-  const migratedPages = new Set(["orderHistory","order","inventory","production","recipe","company_management","store_management","user_matrix"]);
+  const migratedPages = new Set(["orderHistory","order","inventory","production","recipe","company_management","store_management","user_matrix","user_access"]);
   return (
     <AppShell user={user} page={permittedPage} setPage={setPage} context={accessContext} selectedStoreId={selectedStoreId} onSelectStore={setSelectedStoreId} onLogout={async () => { await supabase.auth.signOut(); setProducts([]); setOrders([]); setUser(null); setPage("dashboard"); }}>
       {!migratedPages.has(permittedPage) && <div className="chart-card"><h3>Module migration in progress</h3><p>This screen is temporarily disabled on the Phase 1 branch while its data and write operations are moved to store-scoped APIs. No legacy cross-store operation will run from this screen.</p></div>}
+      {permittedPage === "user_access" && <AdminUserAccess context={accessContext} />}
       {permittedPage === "user_matrix" && <AdminUserMatrix context={accessContext} />}
       {permittedPage === "company_management" && <AdminCompanyStore mode="companies" context={accessContext} />}
       {permittedPage === "store_management" && <AdminCompanyStore mode="stores" context={accessContext} />}
