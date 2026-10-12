@@ -11,7 +11,7 @@ revoke all on public.mha_super_admin_identity from anon,authenticated;
 do $body$
 declare v_user_id uuid; v_matches integer;
 begin
- select count(*),min(id) into v_matches,v_user_id
+ select count(*),(array_agg(id))[1] into v_matches,v_user_id
  from auth.users
  where lower(email)='m.hifzanaziz@gmail.com'
  and email_confirmed_at is not null;
