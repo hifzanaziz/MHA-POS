@@ -221,6 +221,12 @@ const navGroups = [
     { id: "recipe", label: "Recipe Management", icon: BookOpenText },
     { id: "config", label: "Master Configuration", icon: Settings },
   ] },
+  { label: "System Configuration", items: [
+    { id: "company_management", label: "Company Management", icon: Settings },
+    { id: "store_management", label: "Store Management", icon: Store },
+    { id: "user_access", label: "User Access", icon: Settings },
+    { id: "user_matrix", label: "User Matrix", icon: Grid3X3 },
+  ] },
   { label: "Product Management", items: [
     { id: "production", label: "Production SKU", icon: UtensilsCrossed },
   ] },
