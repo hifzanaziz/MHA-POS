@@ -1,3 +1,4 @@
+import CompanyRecipeManagement from './CompanyRecipeManagement.jsx';
 import StoreProduction from './StoreProduction.jsx';
 import StoreInventory from './StoreInventory.jsx';
 import StoreOrderTaking from './StoreOrderTaking.jsx';
@@ -2854,7 +2855,7 @@ function App() {
   const permittedPage = accessLevel(accessContext,page) !== "NONE" ? page : (["dashboard","order","orderHistory","inventory","recipe","config","production"].find(id => accessLevel(accessContext,id) !== "NONE") || null);
   if (!permittedPage) return <div className="public-loading">No module access assigned to this account.</div>;
 
-  const migratedPages = new Set(["orderHistory","order","inventory","production"]);
+  const migratedPages = new Set(["orderHistory","order","inventory","production","recipe"]);
   return (
     <AppShell user={user} page={permittedPage} setPage={setPage} context={accessContext} selectedStoreId={selectedStoreId} onSelectStore={setSelectedStoreId} onLogout={async () => { await supabase.auth.signOut(); setProducts([]); setOrders([]); setUser(null); setPage("dashboard"); }}>
       {!migratedPages.has(permittedPage) && <div className="chart-card"><h3>Module migration in progress</h3><p>This screen is temporarily disabled on the Phase 1 branch while its data and write operations are moved to store-scoped APIs. No legacy cross-store operation will run from this screen.</p></div>}
@@ -2862,7 +2863,7 @@ function App() {
       {permittedPage === "order" && <StoreOrderTaking key={selectedStoreId} context={accessContext} storeId={selectedStoreId} onCompleted={loadOrders} />}
       {permittedPage === "orderHistory" && <OrderHistory orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} reloadOrders={loadOrders} selectedStoreId={selectedStoreId} />}
       {permittedPage === "inventory" && <StoreInventory key={selectedStoreId} context={accessContext} storeId={selectedStoreId} />}
-      {migratedPages.has(permittedPage) && permittedPage === "recipe" && <RecipeManagement products={products} recipes={recipes} setRecipes={setRecipes} setProducts={setProducts} />}
+      {permittedPage === "recipe" && <CompanyRecipeManagement key={selectedStoreId} context={accessContext} storeId={selectedStoreId} />}
       {permittedPage === "production" && <StoreProduction key={selectedStoreId} context={accessContext} storeId={selectedStoreId} />}
       {migratedPages.has(permittedPage) && permittedPage === "config" && <Config options={configOptions} reloadConfig={loadConfig} />}
     </AppShell>
