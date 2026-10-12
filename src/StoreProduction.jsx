@@ -9,6 +9,8 @@ export default function StoreProduction({ context, storeId }) {
   const [reference,setReference]=useState('');
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
+  const [creating,setCreating]=useState(false);
+  const [skuForm,setSkuForm]=useState({sku_code:'',sku_name:'',category:'',base_price:'0',tax_applicable:true});
   const canEdit=accessLevel(context,'production')==='EDIT';
   async function load() {
     const {data,error:rpcError}=await supabase.rpc('mha_staff_store_production_catalog',{p_store_id:storeId});
@@ -39,6 +41,20 @@ export default function StoreProduction({ context, storeId }) {
     }catch(e){setError(e.message || 'Unable to process production.');}
     finally{setBusy(false);}
   }
+  async function createSku(event) {
+    event.preventDefault();
+    if(!canEdit||creating)return;
+    setCreating(true);setError("");
+    try {
+      const {error:rpcError}=await supabase.rpc("mha_create_company_production_sku",{
+        p_store_id:storeId,p_sku_code:skuForm.sku_code.trim(),p_sku_name:skuForm.sku_name.trim(),
+        p_category:skuForm.category.trim()||null,p_base_price:Number(skuForm.base_price),p_tax_applicable:skuForm.tax_applicable
+      });
+      if(rpcError)throw rpcError;
+      setRows(await load());setSkuForm(current=>({...current,sku_code:"",sku_name:"",category:""}));
+    }catch(e){setError(e.message||"Unable to create production SKU.");}
+    finally{setCreating(false);}
+  }
   return <section className="chart-card">
     <h2>Production Management</h2>
     <p>Finished-product stock is tracked by store. Production deducts that store's recipe ingredients and increases that store's finished stock.</p>
@@ -48,6 +64,13 @@ export default function StoreProduction({ context, storeId }) {
       <tbody>{rows.map(item=><tr key={item.product_variant_id}><td>{item.sku_code}</td><td>{item.sku_name}</td><td>{item.variant_name||item.variant_code}</td><td>{Number(item.current_stock).toLocaleString()}</td><td>{Number(item.minimum_stock).toLocaleString()}</td></tr>)}</tbody>
     </table></div>
     {!rows.length && !error && <p>No company production SKUs or variants are available yet.</p>}
+    {canEdit && <form onSubmit={createSku} style={{display:'grid',gap:12,marginTop:20}}>
+      <h3>Create Company Production SKU</h3>
+      <p>A standard variant is created automatically. SKU definitions and prices are shared by all company stores.</p>
+      {['sku_code','sku_name','category','base_price'].map(field=><label key={field}>{field.replaceAll('_',' ')} <input required={field!=='category'} type={field==='base_price'?'number':'text'} min={field==='base_price'?'0':undefined} step={field==='base_price'?'0.01':undefined} value={skuForm[field]} onChange={e=>setSkuForm(current=>({...current,[field]:e.target.value}))} disabled={creating}/></label>)}
+      <label><input type="checkbox" checked={skuForm.tax_applicable} onChange={e=>setSkuForm(current=>({...current,tax_applicable:e.target.checked}))} disabled={creating}/> Tax applicable</label>
+      <button className="primary-btn" type="submit" disabled={creating}>{creating?'Creating...':'Create Production SKU'}</button>
+    </form>}
     {canEdit && <form onSubmit={produce} style={{display:'grid',gap:12,marginTop:20}}>
       <h3>Record Production</h3>
       <label>Product Variant <select required disabled={busy} value={variantId} onChange={e=>setVariantId(e.target.value)}>
