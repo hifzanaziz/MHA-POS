@@ -4,6 +4,16 @@ begin;
 alter table public.inventory_sku add column if not exists company_id bigint references public.mha_company(id);
 alter table public.production_sku add column if not exists company_id bigint references public.mha_company(id);
 alter table public.config_option add column if not exists company_id bigint references public.mha_company(id);
+-- Composite keys ensure store availability cannot reference another company's SKU.
+alter table public.production_sku add constraint mha_production_sku_company_key unique(id,company_id);
+alter table public.inventory_sku add constraint mha_inventory_sku_company_key unique(id,company_id);
+alter table public.mha_store_product_availability add column company_id bigint not null;
+alter table public.mha_store_product_availability
+ add constraint mha_availability_store_company_fk foreign key(store_id,company_id)
+ references public.mha_store(id,company_id);
+alter table public.mha_store_product_availability
+ add constraint mha_availability_sku_company_fk foreign key(production_sku_id,company_id)
+ references public.production_sku(id,company_id);
 -- Recipes, variants and variation values inherit company ownership through their master SKU FKs.
 alter table public.sales_order add column if not exists store_id bigint references public.mha_store(id);
 alter table public.production_entry add column if not exists store_id bigint references public.mha_store(id);
