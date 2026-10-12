@@ -10,6 +10,8 @@ export default function StoreInventory({ context, storeId }) {
   const [reference,setReference] = useState('');
   const [error,setError] = useState('');
   const [busy,setBusy] = useState(false);
+  const [creating,setCreating] = useState(false);
+  const [skuForm,setSkuForm] = useState({sku_code:'',sku_name:'',category:'',order_uom:'Carton',inventory_uom:'Pack',recipe_uom:'g',order_to_inventory:'1',inventory_to_recipe:'1'});
   const canEdit=accessLevel(context,'inventory')==='EDIT';
   async function load() {
     const {data,error:rpcError}=await supabase.rpc('mha_staff_store_inventory',{p_store_id:storeId});
@@ -40,6 +42,21 @@ export default function StoreInventory({ context, storeId }) {
     }catch(e){setError(e.message || 'Unable to receive stock.');}
     finally{setBusy(false);}
   }
+  async function createSku(event) {
+    event.preventDefault();
+    if(!canEdit||creating)return;
+    setCreating(true);setError("");
+    try {
+      const {error:rpcError}=await supabase.rpc("mha_create_company_inventory_sku",{
+        p_store_id:storeId,p_sku_code:skuForm.sku_code.trim(),p_sku_name:skuForm.sku_name.trim(),p_category:skuForm.category.trim()||null,
+        p_order_uom:skuForm.order_uom.trim(),p_inventory_uom:skuForm.inventory_uom.trim(),p_recipe_uom:skuForm.recipe_uom.trim(),
+        p_order_to_inventory:Number(skuForm.order_to_inventory),p_inventory_to_recipe:Number(skuForm.inventory_to_recipe)
+      });
+      if(rpcError)throw rpcError;
+      setRows(await load());setSkuForm(current=>({...current,sku_code:"",sku_name:"",category:""}));
+    }catch(e){setError(e.message||"Unable to create inventory SKU.");}
+    finally{setCreating(false);}
+  }
   return <section className="chart-card">
     <h2>Inventory Management — Inventory SKU</h2>
     <p>Company-shared SKU masters, with stock balances and receiving recorded separately for each store.</p>
@@ -49,6 +66,12 @@ export default function StoreInventory({ context, storeId }) {
       <tbody>{rows.map(item=><tr key={item.inventory_sku_id}><td>{item.sku_code}</td><td>{item.sku_name}</td><td>{item.category}</td><td>{Number(item.current_stock).toLocaleString()} {item.recipe_uom}</td><td>{Number(item.minimum_stock).toLocaleString()}</td></tr>)}</tbody></table>
     </div>
     {!rows.length && !error && <p>No company inventory SKUs have been created yet.</p>}
+    {canEdit && <form onSubmit={createSku} style={{display:'grid',gap:12,marginTop:20}}>
+      <h3>Create Company Inventory SKU</h3>
+      <p>This SKU will be shared with all stores in your company. Stock remains store-specific.</p>
+      {['sku_code','sku_name','category','order_uom','inventory_uom','recipe_uom','order_to_inventory','inventory_to_recipe'].map(field=><label key={field}>{field.replaceAll('_',' ')} <input required={field!=='category'} type={field.includes('to_')?'number':'text'} min={field.includes('to_')?'0.000001':undefined} step={field.includes('to_')?'any':undefined} value={skuForm[field]} onChange={e=>setSkuForm(current=>({...current,[field]:e.target.value}))} disabled={creating}/></label>)}
+      <button className="primary-btn" type="submit" disabled={creating}>{creating?'Creating...':'Create Inventory SKU'}</button>
+    </form>}
     {canEdit && <form onSubmit={receive} style={{display:'grid',gap:12,marginTop:20}}>
       <h3>Receive Stock</h3>
       <label>Inventory SKU <select required value={selectedSku} onChange={e=>setSelectedSku(e.target.value)} disabled={busy}>
