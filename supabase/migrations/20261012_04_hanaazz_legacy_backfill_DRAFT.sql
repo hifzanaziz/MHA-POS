@@ -49,8 +49,8 @@ begin
  if exists (
  select 1 from public.inventory_sku i
  left join public.mha_inventory_store_stock st on st.inventory_sku_id=i.id
- where st.store_id=(select s.id from public.mha_store s join public.mha_company c on c.id=s.company_id where c.company_code='HANAAZZ' and s.store_code='001')
- and st.current_stock is distinct from coalesce(i.current_stock,0)
+ and st.store_id=(select s.id from public.mha_store s join public.mha_company c on c.id=s.company_id where c.company_code='HANAAZZ' and s.store_code='001')
+ where st.current_stock is distinct from coalesce(i.current_stock,0)
  ) then raise exception 'Migration aborted: inventory balance mismatch'; end if;
 end $$;
 commit;
