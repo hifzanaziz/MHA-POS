@@ -12,6 +12,7 @@ create table if not exists public.mha_store (
  company_id bigint not null references public.mha_company(id),
  store_code text not null,
  store_name text not null,
+ public_slug text not null unique,
  is_active boolean not null default true,
  created_at timestamptz not null default now(),
  unique(company_id,store_code),
