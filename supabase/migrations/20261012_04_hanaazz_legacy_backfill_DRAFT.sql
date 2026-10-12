@@ -9,7 +9,7 @@ insert into public.mha_store(company_id,store_code,store_name,public_slug)
 select c.id,'001','Store 001','hanaazz-001'
 from public.mha_company c where c.company_code='HANAAZZ'
 on conflict(company_id,store_code) do update set store_name=excluded.store_name;
--- Do not overwrite any previously assigned ownership.
+-- Guard against accidental reassignment of existing records from another tenant.\ndo $\nbegin\n if exists (select 1 from public.inventory_sku where company_id is not null and company_id <> (select id from public.mha_company where company_code='HANAAZZ'))\n or exists (select 1 from public.production_sku where company_id is not null and company_id <> (select id from public.mha_company where company_code='HANAAZZ'))\n or exists (select 1 from public.sales_order where store_id is not null and store_id <> (select s.id from public.mha_store s join public.mha_company c on c.id=s.company_id where c.company_code='HANAAZZ' and s.store_code='001'))\n then raise exception 'Migration aborted: unexpected pre-existing tenant ownership'; end if;\nend $;\n-- Do not overwrite any previously assigned ownership.
 update public.inventory_sku set company_id=(select id from public.mha_company where company_code='HANAAZZ')
 where company_id is null;
 update public.production_sku set company_id=(select id from public.mha_company where company_code='HANAAZZ')
