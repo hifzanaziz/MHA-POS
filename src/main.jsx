@@ -2718,75 +2718,10 @@ function App() {
     ],
   });
 
-  async function loadMasterData() {
-    try {
-      const [
-        { data: inventoryData, error: inventoryError },
-        { data: productData, error: productError },
-        { data: typeData, error: typeError },
-        { data: valueData, error: valueError },
-        { data: variantData, error: variantError },
-        { data: variantValueData, error: variantValueError },
-        { data: productionEntryData, error: productionEntryError },
-        { data: variantStockData, error: variantStockError },
-      ] = await Promise.all([
-        supabase.from("inventory_sku").select("*").eq("is_active", true).order("sku_code"),
-        supabase.from("production_sku").select("*").eq("is_active", true).order("sku_code"),
-        supabase.from("variation_type").select("*").order("id"),
-        supabase.from("variation_value").select("*").order("id"),
-        supabase.from("product_variant").select("*").eq("is_active", true).order("id"),
-        supabase.from("product_variant_value").select("*"),
-        supabase.from("production_entry").select("production_sku_id, product_variant_id, production_quantity"),
-        supabase.from("product_variant_stock").select("product_variant_id, current_stock, minimum_stock"),
-      ]);
-      const error = inventoryError || productError || typeError || valueError || variantError || variantValueError || productionEntryError || variantStockError;
-      if (error) throw error;
-
-      const inventory = (inventoryData || []).map((item) => ({
-        id: item.id, skuType: "inventory", sku: item.sku_code, name: item.sku_name, category: item.category || "",
-        price: Number(item.price || 0),
-        stock: Number(item.inventory_to_recipe || 1) > 0 ? Number(item.current_stock || 0) / Number(item.inventory_to_recipe || 1) : 0,
-        minimum: Number(item.inventory_to_recipe || 1) > 0 ? Number(item.minimum_stock ?? item.low_stock_level ?? 0) / Number(item.inventory_to_recipe || 1) : 0,
-        orderUom: item.order_uom || "", inventoryUom: item.inventory_uom || "", recipeUom: item.recipe_uom || "",
-        orderToInventory: Number(item.order_to_inventory || 1), inventoryToRecipe: Number(item.inventory_to_recipe || 1),
-        produced: 0, sold: 0, purchaseHistory: [],
-      }));
-
-      const production = (productData || []).map((item) => {
-        const productTypes = (typeData || []).filter((type) => type.production_sku_id === item.id && type.type_name === "Size");
-        const optionGroups = productTypes.map((type) => ({
-          id: `type-${type.id}`, databaseId: type.id, name: type.type_name, required: type.is_required !== false, priceImpact: type.price_impact !== false, recipeImpact: type.recipe_impact !== false,
-          options: (valueData || []).filter((value) => value.variation_type_id === type.id).map((value) => ({
-            id: `value-${value.id}`, databaseId: value.id, name: value.value_name, priceAdjustment: Number(value.price_adjustment || 0), recipeChanges: [],
-          })),
-        }));
-        const variants = (variantData || []).filter((variant) => variant.production_sku_id === item.id).map((variant) => {
-          const linkedValueIds = (variantValueData || []).filter((link) => link.product_variant_id === variant.id).map((link) => link.variation_value_id);
-          const selections = {};
-          productTypes.forEach((type) => {
-            const selectedValue = (valueData || []).find((value) => value.variation_type_id === type.id && linkedValueIds.includes(value.id));
-            if (selectedValue) selections[`type-${type.id}`] = `value-${selectedValue.id}`;
-          });
-          const stockRow = (variantStockData || []).find((row) => row.product_variant_id === variant.id);
-          const produced = (productionEntryData || []).filter((entry) => entry.product_variant_id === variant.id).reduce((sum, entry) => sum + Number(entry.production_quantity || 0), 0);
-          return { id: variant.id, code: variant.variant_code, name: variant.variant_name || "", price: Number(variant.selling_price || 0), produced, stock: Number(stockRow?.current_stock || 0), minimumStock: Number(stockRow?.minimum_stock || 0), selections };
-        });
-        return {
-          id: item.id, skuType: "product", sku: item.sku_code, name: item.sku_name, category: item.category || "", price: Number(item.base_price || 0), taxApplicable: item.tax_applicable !== false,
-          stock: variants.reduce((sum, variant) => sum + Number(variant.stock || 0), 0), minimum: 0,
-          produced: variants.reduce((sum, variant) => sum + Number(variant.produced || 0), 0), sold: 0, optionGroups, variants,
-        };
-      });
-      setProducts([...inventory, ...production]);
-    } catch (error) {
-      console.error("Load master data error:", error);
-    }
-  }
-
+  // Legacy unscoped master/config/usage loaders removed for Phase 1 tenant isolation.
+  // Migrated screens fetch authorized company/store data through scoped RPCs.
   async function loadConfig() {
-    const { data, error } = await supabase.rpc("get_config_options");
-    if (error) { console.error("Load config error:", error); return; }
-    setConfigOptions(data || []);
+    setConfigOptions([]);
   }
 
   async function loadOrders() {
@@ -2807,21 +2742,7 @@ function App() {
     })));
   }
 
-  async function loadInventoryUsage() {
-    const { data, error } = await supabase.rpc("get_inventory_production_usage");
-    if (error) {
-      console.error("Load inventory usage error:", error);
-      setInventoryUsage([]);
-      return;
-    }
-    setInventoryUsage((data || []).map((row) => ({
-      id: row.inventory_sku_id,
-      sku: row.sku_code || "",
-      name: row.sku_name || "Inventory SKU",
-      usage: Number(row.usage || 0),
-      uom: row.recipe_uom || "",
-    })));
-  }
+  // Dashboard usage is intentionally unavailable until a store-scoped report RPC exists.
 
   useEffect(() => {
     ++orderRequestSequence.current;
