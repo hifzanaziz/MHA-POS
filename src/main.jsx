@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { accessLevel, selectDefaultStore } from './tenantAccess.js'
 import React, { useEffect, useMemo, useState } from "react";
 import ReactDOM from "react-dom/client";
 import {
@@ -218,7 +219,10 @@ const navGroups = [
 ];
 const navItems = navGroups.flatMap((group) => group.items);
 
-function AppShell({ user, page, setPage, onLogout, children }) {
+function AppShell({ user, page, setPage, onLogout, children, context, selectedStoreId, onSelectStore }) {
+  const visibleGroups = navGroups.map(group => ({...group,items:group.items.filter(item => accessLevel(context,item.id) !== "NONE")})).filter(group => group.items.length);
+  const visibleItems = visibleGroups.flatMap(group => group.items);
+  const currentStore = context?.stores?.find(store => String(store.id) === String(selectedStoreId));
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -231,7 +235,7 @@ function AppShell({ user, page, setPage, onLogout, children }) {
         </div>
 
         <nav>
-          {navGroups.map((group) => (
+          {visibleGroups.map((group) => (
             <div className="nav-group" key={group.label}>
               <div className="nav-group-label">{group.label}</div>
               {group.items.map(({ id, label, icon: Icon }) => (
@@ -255,8 +259,9 @@ function AppShell({ user, page, setPage, onLogout, children }) {
       <main className="main">
         <header className="topbar">
           <div>
-            <p className="eyebrow">HanaAzz Enterprise • STORE 001</p>
-            <h2>{navItems.find((x) => x.id === page)?.label}</h2>
+            <p className="eyebrow">{currentStore ? `${currentStore.company_name} • ${currentStore.store_name}` : "No store assigned"}</p>
+            <h2>{visibleItems.find((x) => x.id === page)?.label || "Workspace"}</h2>
+            {context?.stores?.length > 1 && <label>Active Store <select aria-label="Active Store" value={selectedStoreId ?? ""} onChange={e => onSelectStore(e.target.value)}>{context.stores.map(store => <option key={store.id} value={store.id}>{store.company_name} • {store.store_name}</option>)}</select></label>}
           </div>
           <div className="user-chip">
             <span className="status-dot" />
@@ -270,7 +275,7 @@ function AppShell({ user, page, setPage, onLogout, children }) {
       </main>
 
       <nav className="mobile-nav">
-        {navItems.map(({ id, label, icon: Icon }) => (
+        {visibleItems.map(({ id, label, icon: Icon }) => (
           <button key={id} className={page === id ? "nav-active" : ""} onClick={() => setPage(id)}>
             <Icon size={20} />
             <span>{label === "Production SKU" ? "Production" : label === "Recipe Management" ? "Recipe" : label === "Order History" ? "Orders" : label}</span>
@@ -2629,6 +2634,27 @@ function PublicOrderPage() {
 function App() {
   const isPublicOrder = window.location.pathname === "/order" || window.location.pathname === "/customer-order";
   const [user, setUser] = useState(null);
+  const [accessContext, setAccessContext] = useState(null);
+  const [selectedStoreId, setSelectedStoreId] = useState(null);
+  const [accessError, setAccessError] = useState("");
+  useEffect(() => {
+    let alive = true;
+    supabase.auth.getUser().then(({data}) => { if (alive && data?.user) setUser(data.user.email); });
+    const {data:{subscription}} = supabase.auth.onAuthStateChange((_event,session) => { if (alive) setUser(session?.user?.email || null); });
+    return () => { alive=false;subscription.unsubscribe(); };
+  }, []);
+  useEffect(() => {
+    let alive = true;
+    if (!user || isPublicOrder) { setAccessContext(null);setSelectedStoreId(null);return; }
+    setAccessError("");
+    supabase.rpc("mha_my_access_context").then(({data,error}) => {
+      if (!alive) return;
+      if (error || !data?.stores) {setAccessError(error?.message || "Unable to load account access.");return;}
+      setAccessContext(data);
+      setSelectedStoreId(selectDefaultStore(data)?.id ?? null);
+    });
+    return () => {alive=false;};
+  }, [user,isPublicOrder]);
   const [page, setPage] = useState("dashboard");
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -2810,16 +2836,21 @@ function App() {
 
   if (isPublicOrder) return <PublicOrderPage />;
   if (!user) return <Login onLogin={setUser} />;
+  if (accessError) return <div className="login-page"><div className="login-card"><h2>Access unavailable</h2><p>{accessError}</p><button onClick={async()=>{await supabase.auth.signOut();setUser(null);}}>Sign out</button></div></div>;
+  if (!accessContext) return <div className="public-loading">Verifying company and store access...</div>;
+  if (!selectedStoreId) return <div className="public-loading">No active store is assigned to this account.</div>;
+  const permittedPage = accessLevel(accessContext,page) !== "NONE" ? page : (["dashboard","order","orderHistory","inventory","recipe","config","production"].find(id => accessLevel(accessContext,id) !== "NONE") || null);
+  if (!permittedPage) return <div className="public-loading">No module access assigned to this account.</div>;
 
   return (
-    <AppShell user={user} page={page} setPage={setPage} onLogout={async () => { await supabase.auth.signOut(); setProducts([]); setOrders([]); setUser(null); setPage("dashboard"); }}>
-      {page === "dashboard" && <Dashboard products={products} orders={orders} recipes={recipes} inventoryUsage={inventoryUsage} onNavigate={setPage} />}
-      {page === "order" && <OrderTaking products={products} setProducts={setProducts} orders={orders} setOrders={setOrders} onNavigate={setPage} reloadOrders={loadOrders} />}
-      {page === "orderHistory" && <OrderHistory orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} reloadOrders={loadOrders} />}
-      {page === "inventory" && <Inventory products={products} setProducts={setProducts} configOptions={configOptions} />}
-      {page === "recipe" && <RecipeManagement products={products} recipes={recipes} setRecipes={setRecipes} setProducts={setProducts} />}
-      {page === "production" && <Production products={products} setProducts={setProducts} recipes={recipes} configOptions={configOptions} />}
-      {page === "config" && <Config options={configOptions} reloadConfig={loadConfig} />}
+    <AppShell user={user} page={permittedPage} setPage={setPage} context={accessContext} selectedStoreId={selectedStoreId} onSelectStore={setSelectedStoreId} onLogout={async () => { await supabase.auth.signOut(); setProducts([]); setOrders([]); setUser(null); setPage("dashboard"); }}>
+      {permittedPage === "dashboard" && <Dashboard products={products} orders={orders} recipes={recipes} inventoryUsage={inventoryUsage} onNavigate={setPage} />}
+      {permittedPage === "order" && <OrderTaking products={products} setProducts={setProducts} orders={orders} setOrders={setOrders} onNavigate={setPage} reloadOrders={loadOrders} />}
+      {permittedPage === "orderHistory" && <OrderHistory orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} reloadOrders={loadOrders} />}
+      {permittedPage === "inventory" && <Inventory products={products} setProducts={setProducts} configOptions={configOptions} />}
+      {permittedPage === "recipe" && <RecipeManagement products={products} recipes={recipes} setRecipes={setRecipes} setProducts={setProducts} />}
+      {permittedPage === "production" && <Production products={products} setProducts={setProducts} recipes={recipes} configOptions={configOptions} />}
+      {permittedPage === "config" && <Config options={configOptions} reloadConfig={loadConfig} />}
     </AppShell>
   );
 }
