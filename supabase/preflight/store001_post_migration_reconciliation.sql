@@ -5,7 +5,8 @@ with target as (
  join public.mha_company c on c.id=s.company_id
  where c.company_code='HANAAZZ' and s.store_code='001'
 ), audit as (
- select 'inventory_company_ownership' check_name,count(*)::bigint mismatch_count
+ select 'target_store_exists' check_name,case when count(*)=1 then 0 else 1 end::bigint mismatch_count from target
+ union all select 'inventory_company_ownership' check_name,count(*)::bigint mismatch_count
  from public.inventory_sku i cross join target t where i.company_id is distinct from t.company_id
  union all select 'production_company_ownership',count(*)
  from public.production_sku p cross join target t where p.company_id is distinct from t.company_id
