@@ -24,14 +24,14 @@ update public.inventory_purchase set store_id=(select s.id from public.mha_store
 where store_id is null;
 update public.stock_transaction set store_id=(select s.id from public.mha_store s join public.mha_company c on c.id=s.company_id where c.company_code='HANAAZZ' and s.store_code='001')
 where store_id is null;
-insert into public.mha_inventory_store_stock(store_id,inventory_sku_id,current_stock,minimum_stock)
-select s.id,i.id,coalesce(i.current_stock,0),coalesce(i.minimum_stock,0)
+insert into public.mha_inventory_store_stock(store_id,inventory_sku_id,company_id,current_stock,minimum_stock)
+select s.id,i.id,c.id,coalesce(i.current_stock,0),coalesce(i.minimum_stock,0)
 from public.inventory_sku i cross join public.mha_store s
 join public.mha_company c on c.id=s.company_id
 where c.company_code='HANAAZZ' and s.store_code='001'
 on conflict(store_id,inventory_sku_id) do nothing;
-insert into public.mha_variant_store_stock(store_id,product_variant_id,current_stock,minimum_stock)
-select s.id,v.product_variant_id,coalesce(v.current_stock,0),coalesce(v.minimum_stock,0)
+insert into public.mha_variant_store_stock(store_id,product_variant_id,company_id,current_stock,minimum_stock)
+select s.id,v.product_variant_id,c.id,coalesce(v.current_stock,0),coalesce(v.minimum_stock,0)
 from public.product_variant_stock v cross join public.mha_store s
 join public.mha_company c on c.id=s.company_id
 where c.company_code='HANAAZZ' and s.store_code='001'
