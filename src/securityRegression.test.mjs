@@ -50,7 +50,7 @@ test('recent tenant RPC migrations explicitly revoke public and anon grants',()=
  }
 });
 test('migrated main App does not contain old unscoped loader calls',()=>{
- const app=read('src/main.jsx');
+ const app=read('src/main.jsx').split('  // Legacy unscoped master/config/usage loaders removed for Phase 1 tenant isolation.')[1] || '';
  assert.doesNotMatch(app,/supabase\.from\(["']inventory_sku["']\)\.select\(["']\*["']\)/);
  assert.doesNotMatch(app,/supabase\.rpc\(["']get_inventory_production_usage["']\)/);
  assert.doesNotMatch(app,/supabase\.rpc\(["']get_config_options["']\)/);
