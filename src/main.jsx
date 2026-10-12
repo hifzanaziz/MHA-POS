@@ -201,15 +201,22 @@ function Login({ onLogin }) {
   );
 }
 
-const navItems = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "order", label: "Order Taking", icon: ShoppingCart },
-  { id: "orderHistory", label: "Order History", icon: History },
-  { id: "inventory", label: "Inventory", icon: Boxes },
-  { id: "recipe", label: "Recipe Management", icon: BookOpenText },
-  { id: "production", label: "Production SKU", icon: UtensilsCrossed },
-  { id: "config", label: "Config", icon: Settings },
+const navGroups = [
+  { label: "Dashboard", items: [{ id: "dashboard", label: "Dashboard", icon: LayoutDashboard }] },
+  { label: "Order Management", items: [
+    { id: "order", label: "Order Taking", icon: ShoppingCart },
+    { id: "orderHistory", label: "Order History", icon: History },
+  ] },
+  { label: "Inventory Management", items: [
+    { id: "inventory", label: "Inventory SKU", icon: Boxes },
+    { id: "recipe", label: "Recipe Management", icon: BookOpenText },
+    { id: "config", label: "Master Configuration", icon: Settings },
+  ] },
+  { label: "Product Management", items: [
+    { id: "production", label: "Production SKU", icon: UtensilsCrossed },
+  ] },
 ];
+const navItems = navGroups.flatMap((group) => group.items);
 
 function AppShell({ user, page, setPage, onLogout, children }) {
   return (
@@ -224,11 +231,15 @@ function AppShell({ user, page, setPage, onLogout, children }) {
         </div>
 
         <nav>
-          {navItems.map(({ id, label, icon: Icon }) => (
-            <button key={id} className={page === id ? "nav-active" : ""} onClick={() => setPage(id)}>
-              <Icon size={20} />
-              <span>{label}</span>
-            </button>
+          {navGroups.map((group) => (
+            <div className="nav-group" key={group.label}>
+              <div className="nav-group-label">{group.label}</div>
+              {group.items.map(({ id, label, icon: Icon }) => (
+                <button key={id} className={page === id ? "nav-active" : ""} onClick={() => setPage(id)}>
+                  <Icon size={20} /><span>{label}</span>
+                </button>
+              ))}
+            </div>
           ))}
         </nav>
 
