@@ -23,13 +23,13 @@ with check (public.mha_has_permission(company_id,'inventory','EDIT'));
 create policy inventory_company_delete on public.inventory_sku for delete to authenticated
 using (public.mha_has_permission(company_id,'inventory','EDIT'));
 create policy production_company_read on public.production_sku for select to authenticated
-using (public.mha_has_permission(company_id,'production_sku','VIEW'));
+using (public.mha_has_permission(company_id,'production','VIEW'));
 create policy production_company_insert on public.production_sku for insert to authenticated
-with check (public.mha_has_permission(company_id,'production_sku','EDIT'));
+with check (public.mha_has_permission(company_id,'production','EDIT'));
 create policy production_company_update on public.production_sku for update to authenticated
-using (public.mha_has_permission(company_id,'production_sku','EDIT'))
-with check (public.mha_has_permission(company_id,'production_sku','EDIT'));
+using (public.mha_has_permission(company_id,'production','EDIT'))
+with check (public.mha_has_permission(company_id,'production','EDIT'));
 create policy production_company_delete on public.production_sku for delete to authenticated
-using (public.mha_has_permission(company_id,'production_sku','EDIT'));
--- Intentionally rollback-only until production_sku permission code is verified.
+using (public.mha_has_permission(company_id,'production','EDIT'));
+-- Intentionally rollback-only pending application compatibility and RPC audit.
 rollback;
