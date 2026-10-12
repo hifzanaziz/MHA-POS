@@ -20,3 +20,9 @@ test('public ordering route requires an explicit store',()=>{
  assert.equal(parseStoreOrderPath('/order'),null);
  assert.equal(parseStoreOrderPath('/order/store/../secret'),null);
 });
+
+test('super admin can choose active stores from every company',()=>{
+ const admin={user_id:'admin',company_id:null,is_active:true,is_super_admin:true};
+ const stores=[{id:1,company_id:1,is_active:true},{id:2,company_id:2,is_active:true},{id:3,company_id:2,is_active:false}];
+ assert.deepEqual(assignedStores(admin,stores,[]).map(s=>s.id),[1,2]);
+});
