@@ -113,10 +113,13 @@ test('read-only RPC grant audit covers public, internal and administrative funct
  assert.doesNotMatch(sql,/\b(?:INSERT|UPDATE|DELETE|ALTER|DROP|REVOKE|GRANT)\s+(?:ON|INTO|FROM|TABLE|FUNCTION|public\.)/i);
 });
 
-test('Phase 1 preview cannot mount legacy unscoped public ordering',()=>{
+test('public ordering routes only to store-scoped APIs',()=>{
  const app=read('src/main.jsx');
- assert.match(app,/const publicOrderPath =/);
- assert.match(app,/window\.location\.pathname\.startsWith\("\/order\/store\/"\)/);
+ const publicPage=read('src/PublicStoreOrder.jsx');
+ assert.match(app,/parsePublicStoreSlug\(window\.location\.pathname\)/);
+ assert.match(app,/if \(publicStoreSlug\) return <PublicStoreOrder slug=\{publicStoreSlug\}/);
  assert.doesNotMatch(app,/if \(isPublicOrder\) return <PublicOrderPage/);
- assert.match(app,/if \(isPublicOrder\) return <div className="public-loading">Public ordering is temporarily unavailable/);
+ assert.match(publicPage,/mha_public_store_menu/);
+ assert.match(publicPage,/mha_create_public_store_order/);
+ assert.doesNotMatch(publicPage,/create_public_sales_order|get_public_order_menu/);
 });
