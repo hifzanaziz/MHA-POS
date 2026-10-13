@@ -2881,7 +2881,7 @@ function App() {
     async function saveStaffBaseRecipe(e){
       e.preventDefault();setStaffEditMessage("");
       const ingredients=staffBaseDraft.map(i=>({inventory_sku_id:Number(i.inventory_sku_id),quantity:Number(i.quantity)}));
-      if(!ingredients.length||ingredients.some(i=>!Number.isSafeInteger(i.inventory_sku_id)||i.inventory_sku_id<1||!Number.isFinite(i.quantity)||i.quantity<=0||i.quantity>1000000)||new Set(ingredients.map(i=>i.inventory_sku_id)).size!==ingredients.length){setStaffEditMessage('Enter valid unique ingredients and quantities.');return;}
+      if(!ingredients.length||ingredients.some(i=>!Number.isSafeInteger(i.inventory_sku_id)||i.inventory_sku_id<1||!Number.isFinite(i.quantity)||i.quantity<=0||i.quantity>1000000||!/^\d+(?:\.\d{1,4})?$/.test(staffBaseDraft[ingredients.indexOf(i)].quantity))||new Set(ingredients.map(i=>i.inventory_sku_id)).size!==ingredients.length){setStaffEditMessage('Enter valid unique ingredients and quantities.');return;}
       try{
         await staffRequest('mha-staff-recipe-update',staffSession.token,{recipe_type:'base',production_sku_id:staffBaseRecipe.product.id,ingredients});
         const response=await staffRequest('mha-staff-catalog',staffSession.token,{module:'base_recipe',production_sku_id:staffBaseRecipe.product.id});
@@ -2917,7 +2917,7 @@ function App() {
       setStaffOrderError("");
       try{
         const response=await staffRequest('mha-staff-catalog',staffSession.token,{module});
-        setStaffCatalogModule(module);setStaffCatalog(response.items||[]);setStaffVariants([]);setStaffVariantSku(null);setStaffEditSku(null);setStaffEditMessage("");
+        setStaffCatalogModule(module);setStaffCatalog(response.items||[]);setStaffVariants([]);setStaffVariantSku(null);setStaffRecipeView(null);setStaffBaseRecipe(null);setStaffEditSku(null);setStaffEditMessage("");
       }catch(e){setStaffCatalog([]);setStaffOrderError(e.message);}
     }
     return <div style={{padding:24,maxWidth:1100,margin:'0 auto'}}>
