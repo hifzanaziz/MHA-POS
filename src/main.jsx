@@ -2665,6 +2665,10 @@ function App() {
   const [staffOrders,setStaffOrders]=useState([]);
   const [staffCatalog,setStaffCatalog]=useState([]);
   const [staffCatalogModule,setStaffCatalogModule]=useState("inventory");
+  const [staffEditSku,setStaffEditSku]=useState(null);
+  const [staffEditName,setStaffEditName]=useState("");
+  const [staffEditCategory,setStaffEditCategory]=useState("");
+  const [staffEditMessage,setStaffEditMessage]=useState("");
   const [staffOrderError,setStaffOrderError]=useState("");
   const [staffStoreId,setStaffStoreId]=useState("");
   async function staffRequest(path,token,body){
@@ -2828,13 +2832,21 @@ function App() {
         setStaffOrders(response.orders||[]);
       }catch(e){setStaffOrders([]);setStaffOrderError(e.message);}
     }
+    async function saveStaffSku(e){
+      e.preventDefault();setStaffEditMessage("");
+      try{
+        const response=await staffRequest('mha-staff-inventory-update',staffSession.token,{sku_id:staffEditSku.id,sku_name:staffEditName,category:staffEditCategory});
+        setStaffCatalog(old=>old.map(i=>i.id===staffEditSku.id?{...i,...response.sku}:i));
+        setStaffEditSku(null);setStaffEditMessage("Inventory SKU updated.");
+      }catch(error){setStaffEditMessage(error.message);}
+    }
     const permitted=['VIEW','EDIT'].includes(staffSession.staff.permissions?.orderHistory);
     async function loadStaffCatalog(module){
       if(Date.now()>=staffSession.expiresAt){setStaffSession(null);return;}
       setStaffOrderError("");
       try{
         const response=await staffRequest('mha-staff-catalog',staffSession.token,{module});
-        setStaffCatalogModule(module);setStaffCatalog(response.items||[]);
+        setStaffCatalogModule(module);setStaffCatalog(response.items||[]);setStaffEditSku(null);setStaffEditMessage("");
       }catch(e){setStaffCatalog([]);setStaffOrderError(e.message);}
     }
     return <div style={{padding:24,maxWidth:1100,margin:'0 auto'}}>
@@ -2845,7 +2857,9 @@ function App() {
       <div style={{display:'flex',gap:8,marginTop:18}}>
         {['inventory','production'].filter(m=>['VIEW','EDIT'].includes(staffSession.staff.permissions?.[m])).map(m=><button key={m} onClick={()=>loadStaffCatalog(m)}>Load {m==='inventory'?'Inventory':'Production'} SKUs</button>)}
       </div>
-      {staffCatalog.length>0&&<div><h3>{staffCatalogModule==='inventory'?'Inventory':'Production'} SKU Catalog (Read Only)</h3><table><thead><tr><th>SKU</th><th>Name</th><th>Category</th></tr></thead><tbody>{staffCatalog.map(i=><tr key={i.id}><td>{i.sku_code}</td><td>{i.sku_name}</td><td>{i.category}</td></tr>)}</tbody></table></div>}
+      {staffCatalog.length>0&&<div><h3>{staffCatalogModule==='inventory'?'Inventory':'Production'} SKU Catalog (Read Only)</h3><table><thead><tr><th>SKU</th><th>Name</th><th>Category</th>{staffCatalogModule==='inventory'&&staffSession.staff.permissions?.inventory==='EDIT'&&<th>Action</th>}</tr></thead><tbody>{staffCatalog.map(i=><tr key={i.id}><td>{i.sku_code}</td><td>{i.sku_name}</td><td>{i.category}</td>{staffCatalogModule==='inventory'&&staffSession.staff.permissions?.inventory==='EDIT'&&<td><button onClick={()=>{setStaffEditSku(i);setStaffEditName(i.sku_name||"");setStaffEditCategory(i.category||"");}}>Edit</button></td>}</tr>)}</tbody></table></div>}
+      {staffEditSku&&<form onSubmit={saveStaffSku}><h3>Edit {staffEditSku.sku_code}</h3><label>SKU Name <input required value={staffEditName} onChange={e=>setStaffEditName(e.target.value)}/></label><label>Category <input value={staffEditCategory} onChange={e=>setStaffEditCategory(e.target.value)}/></label><button type="submit">Save SKU</button><button type="button" onClick={()=>setStaffEditSku(null)}>Cancel</button></form>}
+      {staffEditMessage&&<p role="status">{staffEditMessage}</p>}
       {staffOrderError&&<p role="alert">{staffOrderError}</p>}
       <div style={{overflowX:'auto',marginTop:20}}><table style={{width:'100%'}}><thead><tr><th>Order</th><th>Created</th><th>Customer</th><th>Total</th><th>Payment</th><th>Pickup</th></tr></thead><tbody>{staffOrders.map(o=><tr key={o.id}><td>{o.order_no}</td><td>{o.created_at}</td><td>{o.customer_name}</td><td>{o.grand_total}</td><td>{o.payment_status}</td><td>{o.pickup_status}</td></tr>)}</tbody></table></div>
       <button onClick={()=>{setStaffSession(null);setStaffOrders([]);}}>Sign out</button>
