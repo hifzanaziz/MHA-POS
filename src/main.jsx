@@ -2871,7 +2871,7 @@ function App() {
         setStaffRecipeView({variant,source:result.recipe.source,items:result.recipe.items||[]});
         setStaffRecipeDraft((result.recipe.items||[]).map(i=>({inventory_sku_id:String(i.inventory_sku_id),quantity:String(i.quantity)})));
         if(staffSession.staff.permissions?.recipe==='EDIT'){
-          const inventory=await staffRequest('mha-staff-catalog',staffSession.token,{module:'inventory'});
+          const inventory=await staffRequest('mha-staff-catalog',staffSession.token,{module:'recipe_ingredients'});
           setStaffRecipeInventory(inventory.items||[]);
         }
       }catch(error){setStaffOrderError(error.message);}
