@@ -13,10 +13,11 @@ Deno.serve(async(req)=>{
  if(!claims)return respond({error:'Unauthorized'},401);
  let input:Record<string,unknown>;
  try{input=await req.json();}catch{return respond({error:'Invalid request'},400);}
- const id=Number(input?.variant_id);
+ const id=Number(input?.variant_id ?? input?.production_sku_id);
+ const isBase=input?.recipe_type==='base';
  if(!Number.isSafeInteger(id)||id<1||!Array.isArray(input.ingredients)||input.ingredients.length>100)return respond({error:'Invalid ingredients'},400);
  const db=createClient(url,service,{auth:{persistSession:false,autoRefreshToken:false}});
- const {data,error}=await db.rpc('mha_staff_save_variant_recipe',{p_staff_id:claims.staff_id,p_company_id:claims.company_id,p_session_version:claims.session_version,p_variant_id:id,p_ingredients:input.ingredients});
+ const {data,error}=await db.rpc(isBase?'mha_staff_save_base_recipe':'mha_staff_save_variant_recipe',{p_staff_id:claims.staff_id,p_company_id:claims.company_id,p_session_version:claims.session_version,...(isBase?{p_production_sku_id:id}:{p_variant_id:id}),p_ingredients:input.ingredients});
  if(error)return respond({error:'Update not permitted or invalid'},403);
  return respond({result:data});
 });
