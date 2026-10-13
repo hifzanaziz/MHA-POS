@@ -2666,6 +2666,8 @@ function App() {
   const [staffCatalog,setStaffCatalog]=useState([]);
   const [staffCatalogModule,setStaffCatalogModule]=useState("inventory");
   const [staffEditSku,setStaffEditSku]=useState(null);
+  const [staffVariants,setStaffVariants]=useState([]);
+  const [staffVariantSku,setStaffVariantSku]=useState(null);
   const [staffEditName,setStaffEditName]=useState("");
   const [staffEditCategory,setStaffEditCategory]=useState("");
   const [staffEditMessage,setStaffEditMessage]=useState("");
@@ -2840,13 +2842,20 @@ function App() {
         setStaffEditSku(null);setStaffEditMessage("SKU updated.");
       }catch(error){setStaffEditMessage(error.message);}
     }
+    async function loadStaffVariants(sku){
+      setStaffOrderError("");
+      try{
+        const result=await staffRequest('mha-staff-catalog',staffSession.token,{module:'variations',production_sku_id:sku.id});
+        setStaffVariantSku(sku);setStaffVariants(result.items||[]);
+      }catch(error){setStaffOrderError(error.message);}
+    }
     const permitted=['VIEW','EDIT'].includes(staffSession.staff.permissions?.orderHistory);
     async function loadStaffCatalog(module){
       if(Date.now()>=staffSession.expiresAt){setStaffSession(null);return;}
       setStaffOrderError("");
       try{
         const response=await staffRequest('mha-staff-catalog',staffSession.token,{module});
-        setStaffCatalogModule(module);setStaffCatalog(response.items||[]);setStaffEditSku(null);setStaffEditMessage("");
+        setStaffCatalogModule(module);setStaffCatalog(response.items||[]);setStaffVariants([]);setStaffVariantSku(null);setStaffEditSku(null);setStaffEditMessage("");
       }catch(e){setStaffCatalog([]);setStaffOrderError(e.message);}
     }
     return <div style={{padding:24,maxWidth:1100,margin:'0 auto'}}>
@@ -2857,7 +2866,8 @@ function App() {
       <div style={{display:'flex',gap:8,marginTop:18}}>
         {['inventory','production'].filter(m=>['VIEW','EDIT'].includes(staffSession.staff.permissions?.[m])).map(m=><button key={m} onClick={()=>loadStaffCatalog(m)}>Load {m==='inventory'?'Inventory':'Production'} SKUs</button>)}
       </div>
-      {staffCatalog.length>0&&<div><h3>{staffCatalogModule==='inventory'?'Inventory':'Production'} SKU Catalog (Read Only)</h3><table><thead><tr><th>SKU</th><th>Name</th><th>Category</th>{staffSession.staff.permissions?.[staffCatalogModule]==='EDIT'&&<th>Action</th>}</tr></thead><tbody>{staffCatalog.map(i=><tr key={i.id}><td>{i.sku_code}</td><td>{i.sku_name}</td><td>{i.category}</td>{staffSession.staff.permissions?.[staffCatalogModule]==='EDIT'&&<td><button onClick={()=>{setStaffEditSku(i);setStaffEditName(i.sku_name||"");setStaffEditCategory(i.category||"");}}>Edit</button></td>}</tr>)}</tbody></table></div>}
+      {staffCatalog.length>0&&<div><h3>{staffCatalogModule==='inventory'?'Inventory':'Production'} SKU Catalog (Read Only)</h3><table><thead><tr><th>SKU</th><th>Name</th><th>Category</th>{staffCatalogModule==='production'&&<th>Variations</th>}{staffSession.staff.permissions?.[staffCatalogModule]==='EDIT'&&<th>Action</th>}</tr></thead><tbody>{staffCatalog.map(i=><tr key={i.id}><td>{i.sku_code}</td><td>{i.sku_name}</td><td>{i.category}</td>{staffCatalogModule==='production'&&<td><button onClick={()=>loadStaffVariants(i)}>View</button></td>}{staffSession.staff.permissions?.[staffCatalogModule]==='EDIT'&&<td><button onClick={()=>{setStaffEditSku(i);setStaffEditName(i.sku_name||"");setStaffEditCategory(i.category||"");}}>Edit</button></td>}</tr>)}</tbody></table></div>}
+      {staffVariantSku&&<div><h3>Variations — {staffVariantSku.sku_code}</h3><table><thead><tr><th>Code</th><th>Name</th><th>Price</th><th>Active</th></tr></thead><tbody>{staffVariants.map(v=><tr key={v.id}><td>{v.variant_code}</td><td>{v.variant_name}</td><td>{v.selling_price}</td><td>{v.is_active?'Yes':'No'}</td></tr>)}</tbody></table>{staffVariants.length===0&&<p>No variations configured.</p>}</div>}
       {staffEditSku&&<form onSubmit={saveStaffSku}><h3>Edit {staffEditSku.sku_code}</h3><label>SKU Name <input required value={staffEditName} onChange={e=>setStaffEditName(e.target.value)}/></label><label>Category <input value={staffEditCategory} onChange={e=>setStaffEditCategory(e.target.value)}/></label><button type="submit">Save SKU</button><button type="button" onClick={()=>setStaffEditSku(null)}>Cancel</button></form>}
       {staffEditMessage&&<p role="status">{staffEditMessage}</p>}
       {staffOrderError&&<p role="alert">{staffOrderError}</p>}
