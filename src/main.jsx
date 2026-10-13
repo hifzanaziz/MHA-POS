@@ -2670,6 +2670,9 @@ function App() {
   const [staffVariantSku,setStaffVariantSku]=useState(null);
   const [staffRecipeView,setStaffRecipeView]=useState(null);
   const [staffBaseRecipe,setStaffBaseRecipe]=useState(null);
+  const [staffRecipeProducts,setStaffRecipeProducts]=useState([]);
+  const [staffRecipeVariants,setStaffRecipeVariants]=useState([]);
+  const [staffRecipeProduct,setStaffRecipeProduct]=useState(null);
   const [staffBaseDraft,setStaffBaseDraft]=useState([]);
   const [staffRecipeDraft,setStaffRecipeDraft]=useState([]);
   const [staffRecipeInventory,setStaffRecipeInventory]=useState([]);
@@ -2866,6 +2869,20 @@ function App() {
         setStaffPriceVariant(null);setStaffEditMessage('Variation price updated.');
       }catch(error){setStaffEditMessage(error.message);}
     }
+    async function loadStaffRecipeProducts(){
+      setStaffOrderError("");
+      try{
+        const result=await staffRequest('mha-staff-catalog',staffSession.token,{module:'recipe_products'});
+        setStaffRecipeProducts(result.items||[]);setStaffRecipeVariants([]);setStaffRecipeProduct(null);setStaffRecipeView(null);setStaffBaseRecipe(null);
+      }catch(error){setStaffOrderError(error.message);}
+    }
+    async function loadStaffRecipeVariants(product){
+      setStaffOrderError("");
+      try{
+        const result=await staffRequest('mha-staff-catalog',staffSession.token,{module:'recipe_variations',production_sku_id:product.id});
+        setStaffRecipeProduct(product);setStaffRecipeVariants(result.items||[]);setStaffRecipeView(null);
+      }catch(error){setStaffOrderError(error.message);}
+    }
     async function loadStaffBaseRecipe(product){
       setStaffOrderError("");
       try{
@@ -2928,6 +2945,9 @@ function App() {
       <div style={{display:'flex',gap:8,marginTop:18}}>
         {['inventory','production'].filter(m=>['VIEW','EDIT'].includes(staffSession.staff.permissions?.[m])).map(m=><button key={m} onClick={()=>loadStaffCatalog(m)}>Load {m==='inventory'?'Inventory':'Production'} SKUs</button>)}
       </div>
+      {['VIEW','EDIT'].includes(staffSession.staff.permissions?.recipe)&&<button type="button" onClick={loadStaffRecipeProducts}>Open Recipe Management</button>}
+      {staffRecipeProducts.length>0&&<div><h3>Recipe Management — Company Production SKUs</h3><table><thead><tr><th>SKU</th><th>Name</th><th>Actions</th></tr></thead><tbody>{staffRecipeProducts.map(p=><tr key={p.id}><td>{p.sku_code}</td><td>{p.sku_name}</td><td><button onClick={()=>loadStaffBaseRecipe(p)}>Base Recipe</button><button onClick={()=>loadStaffRecipeVariants(p)}>Variations</button></td></tr>)}</tbody></table></div>}
+      {staffRecipeProduct&&<div><h3>Recipe Variations — {staffRecipeProduct.sku_code}</h3>{staffRecipeVariants.map(v=><div key={v.id}>{v.variant_name} <button onClick={()=>loadStaffRecipe(v)}>View Recipe</button></div>)}{staffRecipeVariants.length===0&&<p>No variations configured.</p>}</div>}
       {staffCatalog.length>0&&<div><h3>{staffCatalogModule==='inventory'?'Inventory':'Production'} SKU Catalog (Read Only)</h3><table><thead><tr><th>SKU</th><th>Name</th><th>Category</th>{staffCatalogModule==='production'&&<th>Variations</th>}{staffSession.staff.permissions?.[staffCatalogModule]==='EDIT'&&<th>Action</th>}</tr></thead><tbody>{staffCatalog.map(i=><tr key={i.id}><td>{i.sku_code}</td><td>{i.sku_name}</td><td>{i.category}</td>{staffCatalogModule==='production'&&<td><button onClick={()=>loadStaffVariants(i)}>View</button>{['VIEW','EDIT'].includes(staffSession.staff.permissions?.recipe)&&<button onClick={()=>loadStaffBaseRecipe(i)}>Base Recipe</button>}</td>}{staffSession.staff.permissions?.[staffCatalogModule]==='EDIT'&&<td><button onClick={()=>{setStaffEditSku(i);setStaffEditName(i.sku_name||"");setStaffEditCategory(i.category||"");}}>Edit</button></td>}</tr>)}</tbody></table></div>}
       {staffBaseRecipe&&<div><h3>Base Recipe — {staffBaseRecipe.product.sku_code}</h3><table><thead><tr><th>SKU</th><th>Ingredient</th><th>Quantity</th></tr></thead><tbody>{staffBaseRecipe.items.map(i=><tr key={i.inventory_sku_id}><td>{i.sku_code}</td><td>{i.sku_name}</td><td>{i.quantity}</td></tr>)}</tbody></table>{staffBaseRecipe.items.length===0&&<p>No base recipe configured.</p>}{staffSession.staff.permissions?.recipe==='EDIT'&&<form onSubmit={saveStaffBaseRecipe}>{staffBaseDraft.map((i,index)=><div key={index}><select required value={i.inventory_sku_id} onChange={e=>setStaffBaseDraft(old=>old.map((v,n)=>n===index?{...v,inventory_sku_id:e.target.value}:v))}><option value="">Select ingredient</option>{staffRecipeInventory.map(s=><option key={s.id} value={s.id}>{s.sku_code} — {s.sku_name}</option>)}</select><input required type="number" min="0.0001" max="1000000" step="0.0001" value={i.quantity} onChange={e=>setStaffBaseDraft(old=>old.map((v,n)=>n===index?{...v,quantity:e.target.value}:v))}/><button type="button" onClick={()=>setStaffBaseDraft(old=>old.filter((_,n)=>n!==index))}>Remove</button></div>)}<button type="button" onClick={()=>setStaffBaseDraft(old=>[...old,{inventory_sku_id:'',quantity:'1'}])}>Add Ingredient</button><button type="submit">Save Base Recipe</button></form>}</div>}
       {staffVariantSku&&<div><h3>Variations — {staffVariantSku.sku_code}</h3><table><thead><tr><th>Code</th><th>Name</th><th>Price</th><th>Active</th>{['VIEW','EDIT'].includes(staffSession.staff.permissions?.recipe)&&<th>Recipe</th>}{staffSession.staff.permissions?.production==='EDIT'&&<th>Action</th>}</tr></thead><tbody>{staffVariants.map(v=><tr key={v.id}><td>{v.variant_code}</td><td>{v.variant_name}</td><td>{v.selling_price}</td><td>{v.is_active?'Yes':'No'}</td>{['VIEW','EDIT'].includes(staffSession.staff.permissions?.recipe)&&<td><button onClick={()=>loadStaffRecipe(v)}>View Recipe</button></td>}{staffSession.staff.permissions?.production==='EDIT'&&<td><button onClick={()=>{setStaffPriceVariant(v);setStaffPriceValue(String(v.selling_price));}}>Edit Price</button></td>}</tr>)}</tbody></table>{staffVariants.length===0&&<p>No variations configured.</p>}</div>}
