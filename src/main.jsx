@@ -2662,6 +2662,9 @@ function App() {
   const [user, setUser] = useState(null);
   const [staffSession,setStaffSession]=useState(null);
   const [staffBusy,setStaffBusy]=useState(false);
+  const [staffOrders,setStaffOrders]=useState([]);
+  const [staffOrderError,setStaffOrderError]=useState("");
+  const [staffStoreId,setStaffStoreId]=useState("");
   async function staffRequest(path,token,body){
     const response=await fetch(import.meta.env.VITE_SUPABASE_URL+'/functions/v1/'+path,{
       method:body?'POST':'GET',
@@ -2679,6 +2682,7 @@ function App() {
       const session=await staffRequest('mha-staff-session',login.access_token);
       if(!session.staff)throw new Error('Unable to verify staff session.');
       setStaffSession({token:login.access_token,staff:session.staff,expiresAt:Date.now()+login.expires_in*1000});
+      setStaffStoreId(String(session.staff.default_store_id));
     }finally{setStaffBusy(false);}
   }
   const [accessContext, setAccessContext] = useState(null);
@@ -2814,12 +2818,24 @@ function App() {
   if (publicStoreSlug) return <PublicStoreOrder slug={publicStoreSlug} />;
   if (isPublicOrder) return <div className="public-loading">Use a valid store-specific ordering link (/order/store/store-slug). No order has been submitted.</div>;
   if(staffSession){
-    return <div className="login-page"><div className="login-card">
-      <h2>Staff session verified</h2>
-      <p>Company staff authentication is active. POS operations remain locked until the server-side store and permission enforcement is complete.</p>
-      <p>Session expires in 15 minutes. Reauthenticate to continue.</p>
-      <button className="primary-btn" onClick={()=>setStaffSession(null)}>Sign out</button>
-    </div></div>;
+    async function fetchStaffOrders(){
+      if(Date.now()>=staffSession.expiresAt){setStaffSession(null);setStaffOrders([]);return;}
+      setStaffOrderError("");
+      try{
+        const response=await staffRequest('mha-staff-orders',staffSession.token,{store_id:Number(staffStoreId)});
+        setStaffOrders(response.orders||[]);
+      }catch(e){setStaffOrders([]);setStaffOrderError(e.message);}
+    }
+    const permitted=['VIEW','EDIT'].includes(staffSession.staff.permissions?.orderHistory);
+    return <div style={{padding:24,maxWidth:1100,margin:'0 auto'}}>
+      <h2>MHA POS — Staff Workspace</h2>
+      <p>Signed in as {staffSession.staff.display_name}. Only server-authorized, read-only Order History is enabled. Other operations remain locked.</p>
+      <label>Store <select value={staffStoreId} onChange={e=>{setStaffStoreId(e.target.value);setStaffOrders([]);}}>{(staffSession.staff.stores||[]).map(s=><option key={s.id} value={s.id}>{s.code} — {s.name}</option>)}</select></label>
+      {permitted?<button className="primary-btn" onClick={fetchStaffOrders}>Load Order History</button>:<p>Order History access is not assigned to this role.</p>}
+      {staffOrderError&&<p role="alert">{staffOrderError}</p>}
+      <div style={{overflowX:'auto',marginTop:20}}><table style={{width:'100%'}}><thead><tr><th>Order</th><th>Created</th><th>Customer</th><th>Total</th><th>Payment</th><th>Pickup</th></tr></thead><tbody>{staffOrders.map(o=><tr key={o.id}><td>{o.order_no}</td><td>{o.created_at}</td><td>{o.customer_name}</td><td>{o.grand_total}</td><td>{o.payment_status}</td><td>{o.pickup_status}</td></tr>)}</tbody></table></div>
+      <button onClick={()=>{setStaffSession(null);setStaffOrders([]);}}>Sign out</button>
+    </div>;
   }
   if (!user) return <Login onLogin={setUser} onStaffLogin={staffLogin} />;
   if (accessError) return <div className="login-page"><div className="login-card"><h2>Access unavailable</h2><p>{accessError}</p><button onClick={async()=>{await supabase.auth.signOut();setUser(null);}}>Sign out</button></div></div>;
