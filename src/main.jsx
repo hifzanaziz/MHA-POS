@@ -95,7 +95,10 @@ function money(value) {
   }).format(value);
 }
 
-function Login({ onLogin }) {
+function Login({ onLogin, onStaffLogin }) {
+  const [mode,setMode]=useState("admin");
+  const [companyCode,setCompanyCode]=useState("");
+  const [username,setUsername]=useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -104,7 +107,7 @@ function Login({ onLogin }) {
   async function submit(e) {
     e.preventDefault();
 
-    if (!email.trim() || !password.trim()) {
+    if ((mode==="admin"&&!email.trim()) || (mode==="staff"&&(!companyCode.trim()||!username.trim())) || !password.trim()) {
       setError("Please enter email and password.");
       return;
     }
@@ -112,6 +115,11 @@ function Login({ onLogin }) {
     setLoading(true);
     setError("");
 
+    if(mode==="staff"){
+      try {await onStaffLogin(companyCode,username,password);}catch(e){setError(e.message||"Staff login failed.");}
+      finally{setLoading(false);}
+      return;
+    }
     const { data, error: loginError } =
       await supabase.auth.signInWithPassword({
         email: email.trim(),
@@ -173,7 +181,9 @@ function Login({ onLogin }) {
           Sign in using your MHA POS account.
         </p>
 
-        <label>
+        <label>Login type <select value={mode} onChange={e=>setMode(e.target.value)}><option value="admin">MHA Super Admin</option><option value="staff">Company Staff</option></select></label>
+        {mode==="staff"&&<><label>Company Code <input required value={companyCode} onChange={e=>setCompanyCode(e.target.value)} autoComplete="organization" placeholder="HANAAZZ"/></label><label>Username <input required value={username} onChange={e=>setUsername(e.target.value)} autoComplete="username"/></label></>}
+        {mode==="admin"&&<label>
           Email
           <input
             type="email"
@@ -182,7 +192,7 @@ function Login({ onLogin }) {
             placeholder="Enter email"
             autoComplete="email"
           />
-        </label>
+        </label>}
 
         <label>
           Password
@@ -2650,6 +2660,27 @@ function App() {
   const isLegacyPublicOrder = window.location.pathname === "/order" || window.location.pathname === "/customer-order";
   const isPublicOrder = Boolean(publicStoreSlug) || isLegacyPublicOrder || window.location.pathname.startsWith("/order/store/");
   const [user, setUser] = useState(null);
+  const [staffSession,setStaffSession]=useState(null);
+  const [staffBusy,setStaffBusy]=useState(false);
+  async function staffRequest(path,token,body){
+    const response=await fetch(import.meta.env.VITE_SUPABASE_URL+'/functions/v1/'+path,{
+      method:body?'POST':'GET',
+      headers:{'Content-Type':'application/json','Authorization':token?'Bearer '+token:''},
+      body:body?JSON.stringify(body):undefined
+    });
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(result.error||'Staff authentication failed.');
+    return result;
+  }
+  async function staffLogin(company,username,password){
+    setStaffBusy(true);
+    try{
+      const login=await staffRequest('mha-staff-login',null,{company_code:company,username,password});
+      const session=await staffRequest('mha-staff-session',login.access_token);
+      if(!session.staff)throw new Error('Unable to verify staff session.');
+      setStaffSession({token:login.access_token,staff:session.staff,expiresAt:Date.now()+login.expires_in*1000});
+    }finally{setStaffBusy(false);}
+  }
   const [accessContext, setAccessContext] = useState(null);
   const [selectedStoreId, setSelectedStoreId] = useState(null);
   const [accessError, setAccessError] = useState("");
@@ -2782,7 +2813,15 @@ function App() {
 
   if (publicStoreSlug) return <PublicStoreOrder slug={publicStoreSlug} />;
   if (isPublicOrder) return <div className="public-loading">Use a valid store-specific ordering link (/order/store/store-slug). No order has been submitted.</div>;
-  if (!user) return <Login onLogin={setUser} />;
+  if(staffSession){
+    return <div className="login-page"><div className="login-card">
+      <h2>Staff session verified</h2>
+      <p>Company staff authentication is active. POS operations remain locked until the server-side store and permission enforcement is complete.</p>
+      <p>Session expires in 15 minutes. Reauthenticate to continue.</p>
+      <button className="primary-btn" onClick={()=>setStaffSession(null)}>Sign out</button>
+    </div></div>;
+  }
+  if (!user) return <Login onLogin={setUser} onStaffLogin={staffLogin} />;
   if (accessError) return <div className="login-page"><div className="login-card"><h2>Access unavailable</h2><p>{accessError}</p><button onClick={async()=>{await supabase.auth.signOut();setUser(null);}}>Sign out</button></div></div>;
   if (!accessContext) return <div className="public-loading">Verifying company and store access...</div>;
   if (!selectedStoreId) return <div className="public-loading">No active store is assigned to this account.</div>;
