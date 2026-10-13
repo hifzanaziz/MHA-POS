@@ -2835,9 +2835,9 @@ function App() {
     async function saveStaffSku(e){
       e.preventDefault();setStaffEditMessage("");
       try{
-        const response=await staffRequest('mha-staff-inventory-update',staffSession.token,{sku_id:staffEditSku.id,sku_name:staffEditName,category:staffEditCategory});
+        const response=await staffRequest(staffCatalogModule==='inventory'?'mha-staff-inventory-update':'mha-staff-production-update',staffSession.token,{sku_id:staffEditSku.id,sku_name:staffEditName,category:staffEditCategory});
         setStaffCatalog(old=>old.map(i=>i.id===staffEditSku.id?{...i,...response.sku}:i));
-        setStaffEditSku(null);setStaffEditMessage("Inventory SKU updated.");
+        setStaffEditSku(null);setStaffEditMessage("SKU updated.");
       }catch(error){setStaffEditMessage(error.message);}
     }
     const permitted=['VIEW','EDIT'].includes(staffSession.staff.permissions?.orderHistory);
@@ -2857,7 +2857,7 @@ function App() {
       <div style={{display:'flex',gap:8,marginTop:18}}>
         {['inventory','production'].filter(m=>['VIEW','EDIT'].includes(staffSession.staff.permissions?.[m])).map(m=><button key={m} onClick={()=>loadStaffCatalog(m)}>Load {m==='inventory'?'Inventory':'Production'} SKUs</button>)}
       </div>
-      {staffCatalog.length>0&&<div><h3>{staffCatalogModule==='inventory'?'Inventory':'Production'} SKU Catalog (Read Only)</h3><table><thead><tr><th>SKU</th><th>Name</th><th>Category</th>{staffCatalogModule==='inventory'&&staffSession.staff.permissions?.inventory==='EDIT'&&<th>Action</th>}</tr></thead><tbody>{staffCatalog.map(i=><tr key={i.id}><td>{i.sku_code}</td><td>{i.sku_name}</td><td>{i.category}</td>{staffCatalogModule==='inventory'&&staffSession.staff.permissions?.inventory==='EDIT'&&<td><button onClick={()=>{setStaffEditSku(i);setStaffEditName(i.sku_name||"");setStaffEditCategory(i.category||"");}}>Edit</button></td>}</tr>)}</tbody></table></div>}
+      {staffCatalog.length>0&&<div><h3>{staffCatalogModule==='inventory'?'Inventory':'Production'} SKU Catalog (Read Only)</h3><table><thead><tr><th>SKU</th><th>Name</th><th>Category</th>{staffSession.staff.permissions?.[staffCatalogModule]==='EDIT'&&<th>Action</th>}</tr></thead><tbody>{staffCatalog.map(i=><tr key={i.id}><td>{i.sku_code}</td><td>{i.sku_name}</td><td>{i.category}</td>{staffSession.staff.permissions?.[staffCatalogModule]==='EDIT'&&<td><button onClick={()=>{setStaffEditSku(i);setStaffEditName(i.sku_name||"");setStaffEditCategory(i.category||"");}}>Edit</button></td>}</tr>)}</tbody></table></div>}
       {staffEditSku&&<form onSubmit={saveStaffSku}><h3>Edit {staffEditSku.sku_code}</h3><label>SKU Name <input required value={staffEditName} onChange={e=>setStaffEditName(e.target.value)}/></label><label>Category <input value={staffEditCategory} onChange={e=>setStaffEditCategory(e.target.value)}/></label><button type="submit">Save SKU</button><button type="button" onClick={()=>setStaffEditSku(null)}>Cancel</button></form>}
       {staffEditMessage&&<p role="status">{staffEditMessage}</p>}
       {staffOrderError&&<p role="alert">{staffOrderError}</p>}
