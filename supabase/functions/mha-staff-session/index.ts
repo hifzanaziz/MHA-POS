@@ -1,10 +1,12 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { verifyStaffToken } from '../_shared/staffSession.ts';
 
+const cors={'access-control-allow-origin':'https://mha-pos.vercel.app','access-control-allow-methods':'GET, POST, OPTIONS','access-control-allow-headers':'authorization,content-type,apikey'};
 const reply=(data:unknown,status=200)=>new Response(JSON.stringify(data),{
- status,headers:{'content-type':'application/json','cache-control':'no-store'}
+ status,headers:{...cors,'content-type':'application/json','cache-control':'no-store'}
 });
 Deno.serve(async(req)=>{
+ if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
  if(req.method!=='GET')return reply({error:'Method not allowed'},405);
  const url=Deno.env.get('SUPABASE_URL');
  const serviceKey=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
