@@ -2668,6 +2668,8 @@ function App() {
   const [staffEditSku,setStaffEditSku]=useState(null);
   const [staffVariants,setStaffVariants]=useState([]);
   const [staffVariantSku,setStaffVariantSku]=useState(null);
+  const [staffPriceVariant,setStaffPriceVariant]=useState(null);
+  const [staffPriceValue,setStaffPriceValue]=useState("");
   const [staffEditName,setStaffEditName]=useState("");
   const [staffEditCategory,setStaffEditCategory]=useState("");
   const [staffEditMessage,setStaffEditMessage]=useState("");
@@ -2849,6 +2851,16 @@ function App() {
         setStaffVariantSku(sku);setStaffVariants(result.items||[]);
       }catch(error){setStaffOrderError(error.message);}
     }
+    async function saveStaffVariantPrice(e){
+      e.preventDefault();setStaffEditMessage("");
+      const price=Number(staffPriceValue);
+      if(staffPriceValue.trim()===''||!Number.isFinite(price)||price<0||!/^\\d+(\\.\\d{1,2})?$/.test(staffPriceValue)){setStaffEditMessage('Enter a valid non-negative price with up to 2 decimal places.');return;}
+      try{
+        const response=await staffRequest('mha-staff-variant-price',staffSession.token,{variant_id:staffPriceVariant.id,selling_price:price});
+        setStaffVariants(old=>old.map(v=>v.id===staffPriceVariant.id?{...v,...response.variant}:v));
+        setStaffPriceVariant(null);setStaffEditMessage('Variation price updated.');
+      }catch(error){setStaffEditMessage(error.message);}
+    }
     const permitted=['VIEW','EDIT'].includes(staffSession.staff.permissions?.orderHistory);
     async function loadStaffCatalog(module){
       if(Date.now()>=staffSession.expiresAt){setStaffSession(null);return;}
@@ -2867,7 +2879,8 @@ function App() {
         {['inventory','production'].filter(m=>['VIEW','EDIT'].includes(staffSession.staff.permissions?.[m])).map(m=><button key={m} onClick={()=>loadStaffCatalog(m)}>Load {m==='inventory'?'Inventory':'Production'} SKUs</button>)}
       </div>
       {staffCatalog.length>0&&<div><h3>{staffCatalogModule==='inventory'?'Inventory':'Production'} SKU Catalog (Read Only)</h3><table><thead><tr><th>SKU</th><th>Name</th><th>Category</th>{staffCatalogModule==='production'&&<th>Variations</th>}{staffSession.staff.permissions?.[staffCatalogModule]==='EDIT'&&<th>Action</th>}</tr></thead><tbody>{staffCatalog.map(i=><tr key={i.id}><td>{i.sku_code}</td><td>{i.sku_name}</td><td>{i.category}</td>{staffCatalogModule==='production'&&<td><button onClick={()=>loadStaffVariants(i)}>View</button></td>}{staffSession.staff.permissions?.[staffCatalogModule]==='EDIT'&&<td><button onClick={()=>{setStaffEditSku(i);setStaffEditName(i.sku_name||"");setStaffEditCategory(i.category||"");}}>Edit</button></td>}</tr>)}</tbody></table></div>}
-      {staffVariantSku&&<div><h3>Variations — {staffVariantSku.sku_code}</h3><table><thead><tr><th>Code</th><th>Name</th><th>Price</th><th>Active</th></tr></thead><tbody>{staffVariants.map(v=><tr key={v.id}><td>{v.variant_code}</td><td>{v.variant_name}</td><td>{v.selling_price}</td><td>{v.is_active?'Yes':'No'}</td></tr>)}</tbody></table>{staffVariants.length===0&&<p>No variations configured.</p>}</div>}
+      {staffVariantSku&&<div><h3>Variations — {staffVariantSku.sku_code}</h3><table><thead><tr><th>Code</th><th>Name</th><th>Price</th><th>Active</th>{staffSession.staff.permissions?.production==='EDIT'&&<th>Action</th>}</tr></thead><tbody>{staffVariants.map(v=><tr key={v.id}><td>{v.variant_code}</td><td>{v.variant_name}</td><td>{v.selling_price}</td><td>{v.is_active?'Yes':'No'}</td>{staffSession.staff.permissions?.production==='EDIT'&&<td><button onClick={()=>{setStaffPriceVariant(v);setStaffPriceValue(String(v.selling_price));}}>Edit Price</button></td>}</tr>)}</tbody></table>{staffVariants.length===0&&<p>No variations configured.</p>}</div>}
+      {staffPriceVariant&&<form onSubmit={saveStaffVariantPrice}><h3>Update Price — {staffPriceVariant.variant_code}</h3><label>Selling Price <input type="number" min="0" max="999999.99" step="0.01" required value={staffPriceValue} onChange={e=>setStaffPriceValue(e.target.value)}/></label><button type="submit">Save Price</button><button type="button" onClick={()=>setStaffPriceVariant(null)}>Cancel</button></form>}
       {staffEditSku&&<form onSubmit={saveStaffSku}><h3>Edit {staffEditSku.sku_code}</h3><label>SKU Name <input required value={staffEditName} onChange={e=>setStaffEditName(e.target.value)}/></label><label>Category <input value={staffEditCategory} onChange={e=>setStaffEditCategory(e.target.value)}/></label><button type="submit">Save SKU</button><button type="button" onClick={()=>setStaffEditSku(null)}>Cancel</button></form>}
       {staffEditMessage&&<p role="status">{staffEditMessage}</p>}
       {staffOrderError&&<p role="alert">{staffOrderError}</p>}
