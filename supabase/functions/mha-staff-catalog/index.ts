@@ -13,11 +13,13 @@ Deno.serve(async(req)=>{
  if(!claims)return reply({error:'Unauthorized'},401);
  let body:unknown;try{body=await req.json();}catch{return reply({error:'Invalid request'},400);}
  const module=(body as Record<string,unknown>)?.module;
- if(module!=='inventory'&&module!=='production'&&module!=='variations')return reply({error:'Invalid module'},400);
+ if(module!=='inventory'&&module!=='production'&&module!=='variations'&&module!=='recipe')return reply({error:'Invalid module'},400);
+ if(module==='recipe'&&(!Number.isSafeInteger(variantId)||variantId<1))return reply({error:'Invalid variation'},400);
  const db=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
  const skuId=Number(body?.production_sku_id);
+ const variantId=Number(body?.variant_id);
  if(module==='variations'&&(!Number.isSafeInteger(skuId)||skuId<1))return reply({error:'Invalid SKU'},400);
- const {data,error}=module==='variations'?await db.rpc('mha_staff_company_variations',{p_staff_id:claims.staff_id,p_company_id:claims.company_id,p_session_version:claims.session_version,p_production_sku_id:skuId}):await db.rpc('mha_staff_company_catalog',{p_staff_id:claims.staff_id,p_company_id:claims.company_id,p_session_version:claims.session_version,p_module:module});
+ const {data,error}=module==='recipe'?await db.rpc('mha_staff_effective_variant_recipe',{p_staff_id:claims.staff_id,p_company_id:claims.company_id,p_session_version:claims.session_version,p_variant_id:variantId}):module==='variations'?await db.rpc('mha_staff_company_variations',{p_staff_id:claims.staff_id,p_company_id:claims.company_id,p_session_version:claims.session_version,p_production_sku_id:skuId}):await db.rpc('mha_staff_company_catalog',{p_staff_id:claims.staff_id,p_company_id:claims.company_id,p_session_version:claims.session_version,p_module:module});
  if(error)return reply({error:'Not authorized for this module'},403);
- return reply({items:data});
+ return reply(module==='recipe'?{recipe:data}:{items:data});
 });
